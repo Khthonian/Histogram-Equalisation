@@ -1,7 +1,7 @@
 #include <iostream>
 #include <vector>
-#include "Utils.h"
-#include "CImg.h"
+#include "include/Utils.h"
+#include "include/CImg.h"
 
 using namespace cimg_library;
 
@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
-	string imgFile = "test.pgm";
+	string imgFile = "colour_test.ppm";
 
 	// Iterate through the command line arguments
 	for (int i = 1; i < argc; i++) {
@@ -167,11 +167,14 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the cumulative histogram
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
 
 		// Set the arguments for the cumulative histogram
 		cumHistoKernel.setArg(0, intHistoBuffer);
 		cumHistoKernel.setArg(1, cumHistoBuffer);
+		cumHistoKernel.setArg(2, cl::Local(histoSize));
+		cumHistoKernel.setArg(3, cl::Local(histoSize));
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;
