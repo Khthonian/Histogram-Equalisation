@@ -1,5 +1,5 @@
 // Calculate an intensity histogram from the input image
-kernel void intHistogram(global const uchar* A, global int* B) {
+kernel void intHistogram(global const ushort* A, global int* B) {
 	// Get the global ID of the current item and store it in a variable
 	int ID = get_global_id(0);
 
@@ -70,11 +70,11 @@ kernel void lookupTable(global int* A, global int* B) {
 	int ID = get_global_id(0);
 
 	// Calculate the value of B[ID]
-	B[ID] = A[ID] * (double)255 / A[255];
+	B[ID] = A[ID] * (double)65535 / A[65535];
 }
 
 // Back-project each output pixel by indexing the look-up table with the original intensity level
-kernel void backprojection(global uchar* A, global int* LUT, global uchar* B) {
+kernel void backprojection(global ushort* A, global int* LUT, global ushort* B) {
 	// Get the global ID of the current item and store it in a variable
 	int ID = get_global_id(0);
 

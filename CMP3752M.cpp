@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
-	string imgFile = "colour_test.ppm";
+	string imgFile = "test_16bit.pgm";
 
 	// Iterate through the command line arguments
 	for (int i = 1; i < argc; i++) {
@@ -60,14 +60,17 @@ int main(int argc, char** argv) {
 	// A variable to hold the converted user input
 	int binCount = 0;
 
+	// A variable to store whether an RGB image was used
+	bool rgbUsed;
+
 	// Prompt to enter a bin count
-	std::cout << "Enter a bin count in between 1 and 256." << "\n";
-	
+	std::cout << "Enter a bin count in between 1 and 65536." << "\n";
+
 	// Loop until a valid input has been received
 	while (true)
 	{
 		// Store user input in the pre-made variable
-		getline(std::cin, userInput); 
+		getline(std::cin, userInput);
 
 		// Check if the user input is an empty string and prompt the user to enter a valid input
 		if (userInput == "") { std::cout << "Please enter a number." << "\n"; continue; }
@@ -78,20 +81,40 @@ int main(int argc, char** argv) {
 		// If the user input is not an integer, catch the exception and prompt the user for a valid input
 		catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
 
-		// Check if the user input is in the range of 1 and 256 and exit with the break statement
-		if (binCount >= 1 && binCount <= 256) { break; }
+		// Check if the user input is in the range of 1 and 65536 and exit with the break statement
+		if (binCount >= 1 && binCount <= 65536) { break; }
 
 		// If the user input is not within the valid range, prompt the user to enter a valid input
-		else { std::cout << "Please enter a number in between 1 and 256." << "\n"; continue; }
+		else { std::cout << "Please enter a number in between 1 and 65536." << "\n"; continue; }
 	}
 
 	// Try to apply the histogram equalisation algorithm
 	try {
 		// Open the image file
-		CImg<unsigned char> imgInput(imgFile.c_str());
+		CImg<unsigned short> tempImgInput(imgFile.c_str());
+
+		// RGB to YCbCr Conversion
+		CImg<unsigned short> imgInput;
+		CImg<unsigned short> cbChannel, crChannel;
+
+		if (tempImgInput.spectrum() == 1) {
+			std::cout << "Loaded image is grayscale." << std::endl;
+			imgInput = tempImgInput;
+			rgbUsed = false;
+		}
+		else if (tempImgInput.spectrum() == 3) {
+			std::cout << "Loaded image is RGB." << std::endl;
+			rgbUsed = true;
+			// Convert RGB image to YCbCr
+			CImg<unsigned short> ycbcrImage = tempImgInput.get_RGBtoYCbCr();
+			// Extract the channels setting y as the input image
+			imgInput = ycbcrImage.get_channel(0);
+			cbChannel = ycbcrImage.get_channel(1);
+			crChannel = ycbcrImage.get_channel(2);
+		}
 
 		// Display the original input image
-		CImgDisplay displayInput(imgInput, "input");
+		CImgDisplay displayInput(tempImgInput, "input");
 
 		// Create an OpenCL context object, with the platform and device to be used
 		cl::Context context = GetContext(platformID, deviceID);
@@ -129,10 +152,10 @@ int main(int argc, char** argv) {
 		size_t histoSize = IH.size() * sizeof(int);
 
 		// Create an OpenCL buffer for the input image
-		cl::Buffer imgInputBuffer(context, CL_MEM_READ_ONLY, imgInput.size());
+		cl::Buffer imgInputBuffer(context, CL_MEM_READ_ONLY, imgInput.size() * sizeof(imgInput[0]));
 
 		// Create an OpenCL buffer for the output image
-		cl::Buffer imgOutputBuffer(context, CL_MEM_READ_WRITE, imgInput.size());
+		cl::Buffer imgOutputBuffer(context, CL_MEM_READ_WRITE, imgInput.size() * sizeof(imgInput[0]));
 
 		// Create an OpenCL buffer for the intensity histogram
 		cl::Buffer intHistoBuffer(context, CL_MEM_READ_WRITE, histoSize);
@@ -144,7 +167,7 @@ int main(int argc, char** argv) {
 		cl::Buffer lookupBuffer(context, CL_MEM_READ_WRITE, histoSize);
 
 		// Write the input image data to the relevant device buffer
-		queue.enqueueWriteBuffer(imgInputBuffer, CL_TRUE, 0, imgInput.size(), &imgInput.data()[0]);
+		queue.enqueueWriteBuffer(imgInputBuffer, CL_TRUE, 0, imgInput.size() * sizeof(imgInput[0]), &imgInput.data()[0]);
 
 		// Prepare the kernel for the intensity histogram
 		cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram");
@@ -154,7 +177,7 @@ int main(int argc, char** argv) {
 		intHistoKernel.setArg(1, intHistoBuffer);
 
 		// Run the intensity histogram event on the device
-		cl::Event intHistoEvent; 
+		cl::Event intHistoEvent;
 		queue.enqueueNDRangeKernel(intHistoKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NullRange, NULL, &intHistoEvent);
 
 		// Read the intensity histogram data from the device back to the host
@@ -166,19 +189,23 @@ int main(int argc, char** argv) {
 		// Fill the cumulative histogram buffer with zeros
 		queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
 
-		// Prepare the kernel for the cumulative histogram
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
+		// Prepare the kernel for the cumulative histogram	
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
 
 		// Set the arguments for the cumulative histogram
 		cumHistoKernel.setArg(0, intHistoBuffer);
 		cumHistoKernel.setArg(1, cumHistoBuffer);
-		cumHistoKernel.setArg(2, cl::Local(histoSize));
-		cumHistoKernel.setArg(3, cl::Local(histoSize));
+		//cumHistoKernel.setArg(2, cl::Local(histoSize));
+		//cumHistoKernel.setArg(3, cl::Local(histoSize));
+
+		std::cout << "Here" << std::endl;
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;
-		queue.enqueueNDRangeKernel(cumHistoKernel, cl::NullRange, cl::NDRange(histoSize), cl::NullRange, NULL, &cumHistoEvent);
+		queue.enqueueNDRangeKernel(cumHistoKernel, cl::NullRange, cl::NDRange(IH.size()), cl::NullRange, NULL, &cumHistoEvent); // ISSUE IS HERE!!!!
+
+		std::cout << "Here" << std::endl;
 
 		// Read the cumulative histogram data from the device back to the host
 		queue.enqueueReadBuffer(cumHistoBuffer, CL_TRUE, 0, histoSize, &CH[0]);
@@ -198,7 +225,7 @@ int main(int argc, char** argv) {
 
 		// Run the look-up table event
 		cl::Event lookupEvent;
-		queue.enqueueNDRangeKernel(lookupKernel, cl::NullRange, cl::NDRange(histoSize), cl::NullRange, NULL, &lookupEvent);
+		queue.enqueueNDRangeKernel(lookupKernel, cl::NullRange, cl::NDRange(IH.size()), cl::NullRange, NULL, &lookupEvent);
 
 		// Read the look-up table data from the device back to the host
 		queue.enqueueReadBuffer(lookupBuffer, CL_TRUE, 0, histoSize, &LUT[0]);
@@ -215,11 +242,11 @@ int main(int argc, char** argv) {
 		cl::Event backprojectEvent;
 
 		// Create a vector for the output image data with the size of the input image
-		vector<unsigned char> outputData(imgInput.size());
+		vector<unsigned short> outputData(imgInput.size());
 		queue.enqueueNDRangeKernel(backprojectKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NullRange, NULL, &backprojectEvent);
-		
+
 		// Read the output image data from the device back to the host
-		queue.enqueueReadBuffer(imgOutputBuffer, CL_TRUE, 0, outputData.size(), &outputData.data()[0]);
+		queue.enqueueReadBuffer(imgOutputBuffer, CL_TRUE, 0, imgInput.size() * sizeof(imgInput[0]), &outputData.data()[0]);
 
 		// Print the intensity histogram values
 		std::cout << std::endl << "Histogram Values: " << IH << std::endl;
@@ -243,7 +270,21 @@ int main(int argc, char** argv) {
 		std::cout << std::endl << "Vector Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
 		// Create and display the output image from the output image buffer
-		CImg<unsigned char> outputImage(outputData.data(), imgInput.width(), imgInput.height(), imgInput.depth(), imgInput.spectrum());
+		CImg<unsigned short> outputImage(outputData.data(), imgInput.width(), imgInput.height(), tempImgInput.depth(), imgInput.spectrum());
+
+		if (rgbUsed == true) {
+			CImg<unsigned short> outputYCbCr = outputImage.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
+
+			for (int x = 0; x < outputYCbCr.width(); x++) {
+				for (int y = 0; y < outputYCbCr.height(); y++) {
+					outputYCbCr(x, y, 0) = outputImage(x, y);
+					outputYCbCr(x, y, 1) = cbChannel(x, y);
+					outputYCbCr(x, y, 2) = crChannel(x, y);
+				}
+			}
+			outputImage = outputYCbCr.get_YCbCrtoRGB();
+		}
+
 		CImgDisplay displayOutput(outputImage, "output");
 
 		// Close the input image and output image windows if the ESC key is pressed
