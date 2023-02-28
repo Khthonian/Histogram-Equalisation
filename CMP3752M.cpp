@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
-	string imgFile = "test_16bit.pgm";
+	string imgFile = "test.pgm";
 
 	// Iterate through the command line arguments
 	for (int i = 1; i < argc; i++) {
@@ -63,6 +63,12 @@ int main(int argc, char** argv) {
 	// A variable to store whether an RGB image was used
 	bool rgbUsed;
 
+	// A variable to store whether a 16-bit image was used
+	bool is16BitUsed;
+
+	// A varaible to store the max intensity of the look-up table
+	int maxIntensity = 255;
+
 	// Prompt to enter a bin count
 	std::cout << "Enter a bin count in between 1 and 65536." << "\n";
 
@@ -91,7 +97,22 @@ int main(int argc, char** argv) {
 	// Try to apply the histogram equalisation algorithm
 	try {
 		// Open the image file
-		CImg<unsigned short> tempImgInput(imgFile.c_str());
+		CImg<unsigned char> tempImgInput(imgFile.c_str());
+
+		// Display the original input image
+		CImgDisplay displayInput(tempImgInput, "input");
+
+		if (tempImgInput.max() <= 255) {
+			std::cout << "Loaded image is 8-bit." << std::endl;
+			is16BitUsed = false;
+			maxIntensity = 255;
+		}
+
+		else if (tempImgInput.max() <= 65535) {
+			std::cout << "Loaded image is 16-bit." << std::endl;
+			is16BitUsed = true;
+			maxIntensity = 65535;
+		}
 
 		// RGB to YCbCr Conversion
 		CImg<unsigned short> imgInput;
@@ -112,9 +133,6 @@ int main(int argc, char** argv) {
 			cbChannel = ycbcrImage.get_channel(1);
 			crChannel = ycbcrImage.get_channel(2);
 		}
-
-		// Display the original input image
-		CImgDisplay displayInput(tempImgInput, "input");
 
 		// Create an OpenCL context object, with the platform and device to be used
 		cl::Context context = GetContext(platformID, deviceID);
@@ -166,6 +184,9 @@ int main(int argc, char** argv) {
 		// Create an OpenCL buffer for the look-up table
 		cl::Buffer lookupBuffer(context, CL_MEM_READ_WRITE, histoSize);
 
+		// Create an OpenCL buffer equal to the histogram size
+		cl::Buffer histoSizeBuffer(context, CL_MEM_READ_WRITE, histoSize);
+
 		// Write the input image data to the relevant device buffer
 		queue.enqueueWriteBuffer(imgInputBuffer, CL_TRUE, 0, imgInput.size() * sizeof(imgInput[0]), &imgInput.data()[0]);
 
@@ -187,18 +208,15 @@ int main(int argc, char** argv) {
 		std::vector<int> CH(binCount);
 
 		// Fill the cumulative histogram buffer with zeros
-		queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
+		//queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the cumulative histogram	
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
 
 		// Set the arguments for the cumulative histogram
 		cumHistoKernel.setArg(0, intHistoBuffer);
 		cumHistoKernel.setArg(1, cumHistoBuffer);
-		//cumHistoKernel.setArg(2, cl::Local(histoSize));
-		//cumHistoKernel.setArg(3, cl::Local(histoSize));
-
 		std::cout << "Here" << std::endl;
 
 		// Run the cumulative histogram event on the device
@@ -214,7 +232,7 @@ int main(int argc, char** argv) {
 		std::vector<int> LUT(binCount);
 
 		// Fill the look-up table buffer with zeros
-		queue.enqueueFillBuffer(lookupBuffer, 0, 0, histoSize);
+		//queue.enqueueFillBuffer(lookupBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the look-up table
 		cl::Kernel lookupKernel = cl::Kernel(program, "lookupTable");
@@ -222,6 +240,7 @@ int main(int argc, char** argv) {
 		// Set the arguments for the look-up table
 		lookupKernel.setArg(0, cumHistoBuffer);
 		lookupKernel.setArg(1, lookupBuffer);
+		lookupKernel.setArg(2, maxIntensity);
 
 		// Run the look-up table event
 		cl::Event lookupEvent;
@@ -267,10 +286,10 @@ int main(int argc, char** argv) {
 		std::cout << std::endl << "LUT Kernel Execution Time [ns]: " << lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
 		// Calculate and print the back-projection kernel execution time
-		std::cout << std::endl << "Vector Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << std::endl << "Back-Projection Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
 		// Create and display the output image from the output image buffer
-		CImg<unsigned short> outputImage(outputData.data(), imgInput.width(), imgInput.height(), tempImgInput.depth(), imgInput.spectrum());
+		CImg<unsigned char> outputImage(outputData.data(), imgInput.width(), imgInput.height(), tempImgInput.depth(), imgInput.spectrum());
 
 		if (rgbUsed == true) {
 			CImg<unsigned short> outputYCbCr = outputImage.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
@@ -285,15 +304,19 @@ int main(int argc, char** argv) {
 			outputImage = outputYCbCr.get_YCbCrtoRGB();
 		}
 
-		CImgDisplay displayOutput(outputImage, "output");
+		// Add if statements to check 8 or 16-bit
+		// Do separate kernel functions
+		// Do separate output functions
 
+		CImgDisplay displayOutput(outputImage, "output");
+		//outputImage.display();
+		
 		// Close the input image and output image windows if the ESC key is pressed
 		while (!displayInput.is_closed() && !displayOutput.is_closed()
 			&& !displayInput.is_keyESC() && !displayOutput.is_keyESC()) {
 			displayInput.wait(1);
 			displayOutput.wait(1);
 		}
-
 	}
 
 	// Catch exception errors and print the error
