@@ -1,134 +1,210 @@
 // Calculate an intensity histogram from the input image
 kernel void intHistogram(global const ushort* A, global int* B) {
 	// Get the global ID of the current item and store it in a variable
-	int ID = get_global_id(0);
+	int globalID = get_global_id(0);
 
 	// Store the value of the array at the 'ID' point and store it in a variable
-	int index = A[ID];
+	int index = A[globalID];
 
-	// Increment the value of the output array at the 'index' point
+	// Atomically increment the value of the output array at the 'index' point
 	atomic_inc(&B[index]);
 }
 
-kernel void intHistogramB(global const ushort* A, global int* H, local int* LH, int A_size, int histBins, global int* binsizeBuffer) {
-	int gid = get_global_id(0);
-	int lid = get_local_id(0);
-	int lsize = get_local_size(0);
-	int gsize = get_global_size(0);
+// Calculate an intensity histogram from the input image
+kernel void intHistogram2(global const ushort* A, global int* B, int imgSize, int binCount, global int* histoSizeBuffer, local int* localBuffer) {
+	// Get the global ID of the current item and store it in a variable
+	int globalID = get_global_id(0);
 
-	// Set Local Histogram Bins to 0
-	for (int i = lid; i < histBins; i += lsize)
-	{
-		LH[i] = 0;
+	// Get the size of all of the items and store it in a variable
+	int globalSize = get_global_size(0);
+
+	// Get the local ID of the current item and store it in a variable
+	int localID = get_local_id(0);
+
+	// Get the size of the local items and store it in a variable
+	int localSize = get_local_size(0);
+
+	// Initialise the local buffer to zero for each work item
+	for (int i = localID; i < binCount; i += localSize)	{
+		localBuffer[i] = 0;
 	}
 
-	// Wait for all threads to finish setting local histogram bins to 0
+	// Synchronise all work items in the work group
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	// Compute Local Histogram
-	for (int i = gid; i < A_size; i += gsize)
-	{
-		for (size_t j = 0; j < histBins; j++)
-		{
-			if (A[i] >= binsizeBuffer[j] && A[i] < binsizeBuffer[j + 1])
-			{
-				atomic_inc(&LH[j]);
+	// Iterate over all of the pixels and increment the respective bin in the local buffer
+	for (int i = globalID; i < imgSize; i += globalSize) {
+		for (int j = 0; j < binCount; j++) {
+			if (A[i] >= histoSizeBuffer[j] && A[i] < histoSizeBuffer[j + 1]) {
+				// Atomically increment the corresponding bin in the local buffer
+				atomic_inc(&localBuffer[j]);
 				break;
 			}
 		}
 	}
 
-	// Wait for all threads to finish computing local histogram
+	// Synchronise all work items in the work group
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	// Copy Local Histograms to Global Histogram
-	for (int i = lid; i < histBins; i += lsize)
-	{
-		atomic_add(&H[i], LH[i]);
+	// Add the local buffer to the global buffer to produce the final histogram
+	for (int i = localID; i < binCount; i += localSize)	{
+		// Atomically add the corresponding bin into the global buffer
+		atomic_add(&B[i], localBuffer[i]);
 	}
 }
 
 // Calculate a cumulative histogram
 kernel void cumHistogram(global int* A, global int* B) {
 	// Get the global ID of the current item and store it in a variable
-	int ID = get_global_id(0);
+	int globalID = get_global_id(0);
 
 	// Get the size of all of the items and store it in a variable
-	int X = get_global_size(0);
+	int globalSize = get_global_size(0);
 
 	// Loop through the indices add the value of the current point to the current cumulative sum
-	for (int i = ID + 1; i < X; i++)
-		atomic_add(&B[i], A[ID]);
+	for (int i = globalID + 1; i < globalSize; i++) {
+		atomic_add(&B[i], A[globalID]);
+	}
 }
 
 // Calculate a cumulative histogram using the Hillis-Steel pattern
 kernel void cumHistogramHS(global int* A, global int* B) {
 	// Get the global ID of the current item and store it in a variable
-	int ID = get_global_id(0);
+	int globalID = get_global_id(0);
 
-	// Get the local size of all of the items and store it in a variable
-	int size = get_global_size(0);
+	// Get the size of all of the items and store it in a variable
+	int globalSize = get_global_size(0);
 	
 	// Create a swap buffer
 	global int* C;
 
-	for (int stride = 1; stride < size; stride *= 2) {
-		B[ID] = A[ID];
-		if (ID >= stride)
-			B[ID] += A[ID - stride];
+	// Iterate over the strides
+	for (int stride = 1; stride < globalSize; stride *= 2) {
+		// Copy the value from A to B
+		B[globalID] = A[globalID];
+		
+		// If the global ID is greater than or equal to the stride, add the value at that point
+		if (globalID >= stride) {
+			B[globalID] += A[globalID - stride];
+		}
 
+		// Synchronise all work items in the work group
 		barrier(CLK_GLOBAL_MEM_FENCE);
 
+		// Swap the buffers
 		C = A;
 		A = B;
 		B = C;
 	}
 }
 
-// Calculate a cumulative histogram using the Hillis-Steel pattern
-kernel void cumHistogramHS2(__global const int* A, global int* B, local int* scratch_1, local int* scratch_2) {
-	int id = get_global_id(0);
-	int lid = get_local_id(0);
-	int N = get_local_size(0);
-	local int* scratch_3;//used for buffer swap
+// Calculate a cumulative histogram using the Hillis-Steele pattern
+kernel void cumHistogramHS2(__global const int* A, global int* B, local int* X, local int* Y) {
+	// Get the global ID of the current item and store it in a variable
+	int globalID = get_global_id(0);
 
-	//cache all N values from global memory to local memory
-	scratch_1[lid] = A[id];
+	// Get the local ID of the current item and store it in a variable
+	int localID = get_local_id(0);
 
-	barrier(CLK_LOCAL_MEM_FENCE);//wait for all local threads to finish copying from global to local memory
+	// Get the size of the local items and store it in a variable
+	int localSize = get_local_size(0);
 
-	for (int i = 1; i < N; i *= 2) {
-		if (lid >= i)
-			scratch_2[lid] = scratch_1[lid] + scratch_1[lid - i];
-		else
-			scratch_2[lid] = scratch_1[lid];
+	// Create a pointer variable
+	local int* Z;
 
+	// Copy the input data into the local memory of the work group
+	X[localID] = A[globalID];
+
+	// Synchronise all work items in the work group
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	// Perform the Hillis-Steele algorithm to calculate the cumulative histogram
+	for (int i = 1; i < localSize; i *= 2) {
+		// If the thread is greater than or equal to the current iterative value, add the two values from the previous iteration
+		if (localID >= i) {
+			Y[localID] = X[localID] + X[localID - i];
+		}
+
+		// If the thread is not greater than or equal to the current iterative value, copy the value from the input array
+		else {
+			Y[localID] = X[localID];
+		}			
+
+		// Synchronise all work items in the work group
 		barrier(CLK_LOCAL_MEM_FENCE);
 
-		//buffer swap
-		scratch_3 = scratch_2;
-		scratch_2 = scratch_1;
-		scratch_1 = scratch_3;
+		// Swap the pointers to the input and output arrays before the next iteration
+		Z = Y;
+		Y = X;
+		X = Z;
 	}
 
-	//copy the cache to output array
-	B[id] = scratch_1[lid];
+	// Copy the output data back to the global memory
+	B[globalID] = X[localID];
+}
+
+// Calculate a cumulative histogram using the Blelloch pattern
+kernel void cumHistogramB(global int* A, global int* B) {
+	// Get the global ID of the current item and store it in a variable
+	int globalID = get_global_id(0);
+
+	// Get the size of all of the items and store it in a variable
+	int globalSize = get_global_size(0);
+
+	// Initialise a variable to store temporary values during swaps
+	int C;
+
+	// Iterate up through all the strides
+	for (int stride = 1; stride < globalSize; stride *= 2) {
+		// Check if the current item should be updated based upon the current stride and global ID
+		if (((globalID + 1) % (stride * 2)) == 0) {
+			A[globalID] += A[globalID - stride];
+		}
+
+		// Synchronise all work items in the work group
+		barrier(CLK_GLOBAL_MEM_FENCE); 
+	}
+
+	// Set the last value to 0
+	if (globalID == 0) {
+		A[globalSize - 1] = 0;
+	}		
+
+	// Synchronise all work items in the work group
+	barrier(CLK_GLOBAL_MEM_FENCE); 
+
+	// Iterate down through all the strides
+	for (int stride = globalSize / 2; stride > 0; stride /= 2) {
+		// Check if the current item should be updated based upon the current stride and global ID 
+		if (((globalID + 1) % (stride * 2)) == 0) {
+			// Swap the values of the current item and the prior item
+			C = A[globalID];
+			A[globalID] += A[globalID - stride];  
+			A[globalID - stride] = C;		
+		}
+
+		// Synchronise all work items in the work group
+		barrier(CLK_GLOBAL_MEM_FENCE); 
+	}
+
+	// Copy A into B
+	B[globalID] = A[globalID];
 }
 
 // Store the normalised cumulative histogram to a look-up table for mapping the original intensities onto the output image
 kernel void lookupTable(global int* A, global int* B, const int maxIntensity) {
 	// Get the global ID of the current item and store it in a variable
-	int ID = get_global_id(0);
+	int globalID = get_global_id(0);
 
-	// Calculate the value of B[ID]
-	B[ID] = A[ID] * (double)maxIntensity / A[maxIntensity];
+	// Calculate the value for the output
+	B[globalID] = A[globalID] * (double)maxIntensity / A[maxIntensity];
 }
 
 // Back-project each output pixel by indexing the look-up table with the original intensity level
 kernel void backprojection(global ushort* A, global int* LUT, global ushort* B) {
 	// Get the global ID of the current item and store it in a variable
-	int ID = get_global_id(0);
+	int globalID = get_global_id(0);
 
-	// Set the value of B[ID] using the value from the look-up table
-	B[ID] = LUT[A[ID]];
+	// Set the value for the output using the value from the look-up table
+	B[globalID] = LUT[A[globalID]];
 }
