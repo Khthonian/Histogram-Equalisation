@@ -5,8 +5,8 @@
 */
 
 /*
-- The contents of this code contain adaptations of Tutorial 2 and Tutorial 3, for the base code and the kernel functions.
 - The code is designed to handle 8-bit imagery, of both greyscale and RGB varieties.
+- The contents of this code contain adaptations and improvements of Tutorial 2 and Tutorial 3, for the base code and the kernel functions.
 - The images that the code was tested on include .ppm and .pgm images. These images can be found in the relevant directories.
 - The intHistogram2 and cumHistogramHS2 kernels require extra arguments to be passed and these can be uncommented and commented as necessary, and are labelled accordingly.
 - The intensity histogram implementations feature a serial implementation and a parallel reduction implementation.
