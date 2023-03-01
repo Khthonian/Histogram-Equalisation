@@ -1,3 +1,20 @@
+/*
+- Stewart Charles Fisher II - ID: 25020928
+- Parallel Programming - CMP3752M
+- Assignment 1
+*/
+
+/*
+- The contents of this code contain adaptations of Tutorial 2 and Tutorial 3, for the base code and the kernel functions.
+- The code is designed to handle 8-bit imagery, of both greyscale and RGB varieties.
+- The images that the code was tested on include .ppm and .pgm images. These images can be found in the relevant directories.
+- The intHistogram2 and cumHistogramHS2 kernels require extra arguments to be passed and these can be uncommented and commented as necessary, and are labelled accordingly.
+- The intensity histogram implementations feature a serial implementation and a parallel reduction implementation.
+- The cumulative histogram implementations feature a simple implementation, two variations of the Hillis-Steele pattern, and a single implementation of the Blelloch pattern.
+- The user is able to give their own desired bin count, which can affect the output of the image and the histograms produced.
+- Performance metrics and the histograms are displayed to the user via the console.
+*/
+
 #include <iostream>
 #include <vector>
 #include "include/Utils.h"
@@ -111,8 +128,10 @@ int main(int argc, char** argv) {
 		else if (tempImgInput.spectrum() == 3) {
 			std::cout << "Loaded image is RGB." << std::endl;
 			rgbUsed = true;
+
 			// Convert RGB image to YCbCr
 			CImg<unsigned short> ycbcrImage = tempImgInput.get_RGBtoYCbCr();
+
 			// Extract the channels setting y as the input image
 			imgInput = ycbcrImage.get_channel(0);
 			cbChannel = ycbcrImage.get_channel(1);
@@ -194,6 +213,8 @@ int main(int argc, char** argv) {
 		// Set the arguments for the intensity histogram
 		intHistoKernel.setArg(0, imgInputBuffer);
 		intHistoKernel.setArg(1, intHistoBuffer);
+
+		// Additional arguments for intHistogram2
 		intHistoKernel.setArg(2, (int)imgInput.size());
 		intHistoKernel.setArg(3, binCount);
 		intHistoKernel.setArg(4, histoSizeBuffer);
@@ -215,18 +236,18 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the cumulative histogram	
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramB");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
 
 		// Set the arguments for the cumulative histogram
 		cumHistoKernel.setArg(0, intHistoBuffer);
 		cumHistoKernel.setArg(1, cumHistoBuffer);
 
 		// Additional arguments for cumHistogramHS2
-		//cumHistoKernel.setArg(2, cl::Local(histoSize));
-		//cumHistoKernel.setArg(3, cl::Local(histoSize));
+		cumHistoKernel.setArg(2, cl::Local(histoSize));
+		cumHistoKernel.setArg(3, cl::Local(histoSize));
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;
