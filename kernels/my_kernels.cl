@@ -3,11 +3,49 @@ kernel void intHistogram(global const ushort* A, global int* B) {
 	// Get the global ID of the current item and store it in a variable
 	int ID = get_global_id(0);
 
-	//Store the value of the array at the 'ID' point and store it in a variable
+	// Store the value of the array at the 'ID' point and store it in a variable
 	int index = A[ID];
 
 	// Increment the value of the output array at the 'index' point
 	atomic_inc(&B[index]);
+}
+
+kernel void intHistogramB(global const ushort* A, global int* H, local int* LH, int A_size, int histBins, global int* binsizeBuffer) {
+	int gid = get_global_id(0);
+	int lid = get_local_id(0);
+	int lsize = get_local_size(0);
+	int gsize = get_global_size(0);
+
+	// Set Local Histogram Bins to 0
+	for (int i = lid; i < histBins; i += lsize)
+	{
+		LH[i] = 0;
+	}
+
+	// Wait for all threads to finish setting local histogram bins to 0
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	// Compute Local Histogram
+	for (int i = gid; i < A_size; i += gsize)
+	{
+		for (size_t j = 0; j < histBins; j++)
+		{
+			if (A[i] >= binsizeBuffer[j] && A[i] < binsizeBuffer[j + 1])
+			{
+				atomic_inc(&LH[j]);
+				break;
+			}
+		}
+	}
+
+	// Wait for all threads to finish computing local histogram
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	// Copy Local Histograms to Global Histogram
+	for (int i = lid; i < histBins; i += lsize)
+	{
+		atomic_add(&H[i], LH[i]);
+	}
 }
 
 // Calculate a cumulative histogram
@@ -45,6 +83,36 @@ kernel void cumHistogramHS(global int* A, global int* B) {
 		A = B;
 		B = C;
 	}
+}
+
+// Calculate a cumulative histogram using the Hillis-Steel pattern
+kernel void cumHistogramHS2(__global const int* A, global int* B, local int* scratch_1, local int* scratch_2) {
+	int id = get_global_id(0);
+	int lid = get_local_id(0);
+	int N = get_local_size(0);
+	local int* scratch_3;//used for buffer swap
+
+	//cache all N values from global memory to local memory
+	scratch_1[lid] = A[id];
+
+	barrier(CLK_LOCAL_MEM_FENCE);//wait for all local threads to finish copying from global to local memory
+
+	for (int i = 1; i < N; i *= 2) {
+		if (lid >= i)
+			scratch_2[lid] = scratch_1[lid] + scratch_1[lid - i];
+		else
+			scratch_2[lid] = scratch_1[lid];
+
+		barrier(CLK_LOCAL_MEM_FENCE);
+
+		//buffer swap
+		scratch_3 = scratch_2;
+		scratch_2 = scratch_1;
+		scratch_1 = scratch_3;
+	}
+
+	//copy the cache to output array
+	B[id] = scratch_1[lid];
 }
 
 // Store the normalised cumulative histogram to a look-up table for mapping the original intensities onto the output image

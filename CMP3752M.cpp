@@ -166,6 +166,18 @@ int main(int argc, char** argv) {
 		// Create a vector for the intensity histogram with the size of the user-defined bin count
 		std::vector<int> IH(binCount);
 
+		int hist = 256;
+
+		std::vector<int> histogramTest(hist);
+
+		std::vector<int> binValues(hist);
+
+		int increments = 256 / hist;
+		for (size_t i = 0; i < hist; i++)
+		{
+			binValues[i] = i * increments;
+		}
+
 		// Calculate the total size of the histogram in bytes
 		size_t histoSize = IH.size() * sizeof(int);
 
@@ -190,16 +202,27 @@ int main(int argc, char** argv) {
 		// Write the input image data to the relevant device buffer
 		queue.enqueueWriteBuffer(imgInputBuffer, CL_TRUE, 0, imgInput.size() * sizeof(imgInput[0]), &imgInput.data()[0]);
 
+		queue.enqueueWriteBuffer(histoSizeBuffer, CL_TRUE, 0, histoSize, &binValues[0]);
+
+		queue.enqueueFillBuffer(intHistoBuffer, 0, 0, histoSize);
+		
 		// Prepare the kernel for the intensity histogram
-		cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram");
+		//cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram");
+		cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogramB");
 
 		// Set the arguments for the intensity histogram
 		intHistoKernel.setArg(0, imgInputBuffer);
 		intHistoKernel.setArg(1, intHistoBuffer);
+		intHistoKernel.setArg(2, cl::Local(histoSize));
+		intHistoKernel.setArg(3, (int)tempImgInput.size());
+		intHistoKernel.setArg(4, hist);
+		intHistoKernel.setArg(5, histoSizeBuffer);
+
 
 		// Run the intensity histogram event on the device
 		cl::Event intHistoEvent;
-		queue.enqueueNDRangeKernel(intHistoKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NullRange, NULL, &intHistoEvent);
+		//queue.enqueueNDRangeKernel(intHistoKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NullRange, NULL, &intHistoEvent);
+		queue.enqueueNDRangeKernel(intHistoKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NDRange(histogramTest.size()), NULL, &intHistoEvent);
 
 		// Read the intensity histogram data from the device back to the host
 		queue.enqueueReadBuffer(intHistoBuffer, CL_TRUE, 0, histoSize, &IH[0]);
@@ -208,15 +231,19 @@ int main(int argc, char** argv) {
 		std::vector<int> CH(binCount);
 
 		// Fill the cumulative histogram buffer with zeros
-		//queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
+		queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the cumulative histogram	
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
 
 		// Set the arguments for the cumulative histogram
 		cumHistoKernel.setArg(0, intHistoBuffer);
 		cumHistoKernel.setArg(1, cumHistoBuffer);
+		cumHistoKernel.setArg(2, cl::Local(histoSize));
+		cumHistoKernel.setArg(3, cl::Local(histoSize));
+
 		std::cout << "Here" << std::endl;
 
 		// Run the cumulative histogram event on the device
@@ -232,7 +259,7 @@ int main(int argc, char** argv) {
 		std::vector<int> LUT(binCount);
 
 		// Fill the look-up table buffer with zeros
-		//queue.enqueueFillBuffer(lookupBuffer, 0, 0, histoSize);
+		queue.enqueueFillBuffer(lookupBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the look-up table
 		cl::Kernel lookupKernel = cl::Kernel(program, "lookupTable");
