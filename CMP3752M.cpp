@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
-	string imgFile = "test_large.pgm";
+	string imgFile = "test.ppm";
 
 	// Iterate through the command line arguments
 	for (int i = 1; i < argc; i++) {
@@ -77,6 +77,9 @@ int main(int argc, char** argv) {
 	// A variable to hold the converted user input
 	int binCount = 0;
 
+	// A variable to store whether a 16-bit image was used
+	bool is16BitUsed;
+
 	// A variable to store whether an RGB image was used
 	bool rgbUsed;
 
@@ -102,7 +105,7 @@ int main(int argc, char** argv) {
 		catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
 
 		// Check if the user input is in the range of 1 and 256 and exit with the break statement
-		if (binCount >= 1 && binCount <= 256) { break; }
+		if (binCount >= 1 && binCount <= 65536) { break; }
 
 		// If the user input is not within the valid range, prompt the user to enter a valid input
 		else { std::cout << "Please enter a number in between 1 and 256." << "\n"; continue; }
@@ -111,10 +114,25 @@ int main(int argc, char** argv) {
 	// Try to apply the histogram equalisation algorithm
 	try {
 		// Open the image file
-		CImg<unsigned char> tempImgInput(imgFile.c_str());
+		CImg<unsigned char> displayImgInput(imgFile.c_str());
+
+		CImg<unsigned short> tempImgInput(imgFile.c_str());
 
 		// Display the original input image
-		CImgDisplay displayInput(tempImgInput, "input");
+		CImgDisplay displayInput(displayImgInput, "input");
+
+		// Check if the image is 16-bit
+		if (tempImgInput.max() <= 255) {
+			std::cout << "Loaded image is 8-bit." << std::endl;
+			is16BitUsed = false;
+			maxIntensity = 255;
+		}
+
+		else if (tempImgInput.max() <= 65535) {
+			std::cout << "Loaded image is 16-bit." << std::endl;
+			is16BitUsed = true;
+			maxIntensity = 65535;
+		}
 
 		// RGB to YCbCr Conversion
 		CImg<unsigned short> imgInput;
@@ -207,24 +225,24 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(intHistoBuffer, 0, 0, histoSize);
 		
 		// Prepare the kernel for the intensity histogram
-		//cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram");
-		cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram2");
+		cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram");
+		//cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram2");
 
 		// Set the arguments for the intensity histogram
 		intHistoKernel.setArg(0, imgInputBuffer);
 		intHistoKernel.setArg(1, intHistoBuffer);
 
 		// Additional arguments for intHistogram2
-		intHistoKernel.setArg(2, (int)imgInput.size());
-		intHistoKernel.setArg(3, binCount);
-		intHistoKernel.setArg(4, histoSizeBuffer);
-		intHistoKernel.setArg(5, cl::Local(histoSize));
+		//intHistoKernel.setArg(2, (int)imgInput.size());
+		//intHistoKernel.setArg(3, binCount);
+		//intHistoKernel.setArg(4, histoSizeBuffer);
+		//intHistoKernel.setArg(5, cl::Local(histoSize));
 
 
 		// Run the intensity histogram event on the device
 		cl::Event intHistoEvent;
-		//queue.enqueueNDRangeKernel(intHistoKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NullRange, NULL, &intHistoEvent);
-		queue.enqueueNDRangeKernel(intHistoKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NDRange(IH.size()), NULL, &intHistoEvent);
+		queue.enqueueNDRangeKernel(intHistoKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NullRange, NULL, &intHistoEvent);
+		//queue.enqueueNDRangeKernel(intHistoKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NDRange(IH.size()), NULL, &intHistoEvent);
 
 		// Read the intensity histogram data from the device back to the host
 		queue.enqueueReadBuffer(intHistoBuffer, CL_TRUE, 0, histoSize, &IH[0]);
@@ -236,18 +254,18 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the cumulative histogram	
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramB");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
 
 		// Set the arguments for the cumulative histogram
 		cumHistoKernel.setArg(0, intHistoBuffer);
 		cumHistoKernel.setArg(1, cumHistoBuffer);
 
 		// Additional arguments for cumHistogramHS2
-		cumHistoKernel.setArg(2, cl::Local(histoSize));
-		cumHistoKernel.setArg(3, cl::Local(histoSize));
+		//cumHistoKernel.setArg(2, cl::Local(histoSize));
+		//cumHistoKernel.setArg(3, cl::Local(histoSize));
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;
@@ -316,39 +334,79 @@ int main(int argc, char** argv) {
 		// Calculate and print the back-projection kernel execution time
 		std::cout << std::endl << "Back-Projection Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
-		// Create and display the output image from the output image buffer
-		CImg<unsigned char> outputImage(outputData.data(), imgInput.width(), imgInput.height(), tempImgInput.depth(), imgInput.spectrum());
+		// Check if 16-bit imagery was used
+		if (is16BitUsed) {
+			// Create and display the output image from the output image buffer
+			CImg<unsigned short> imgOutput(outputData.data(), imgInput.width(), imgInput.height(), tempImgInput.depth(), imgInput.spectrum());
+			
+			// Check if the image used RGB 
+			if (rgbUsed == true) {
+				// Create a new image with the same width and height as the initial input image, with three colour channels
+				CImg<unsigned short> outputYCbCr = imgOutput.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
 
-		// Check if the image used RGB 
-		if (rgbUsed == true) {
-			// Create a new image with the same width and height as the initial input image, with three colour channels
-			CImg<unsigned short> outputYCbCr = outputImage.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
+				// Loop through each pixel in the image
+				for (int x = 0; x < outputYCbCr.width(); x++) {
+					for (int y = 0; y < outputYCbCr.height(); y++) {
+						// Set the first channel of the image to the equalised values
+						outputYCbCr(x, y, 0) = imgOutput(x, y);
 
-			// Loop through each pixel in the image
-			for (int x = 0; x < outputYCbCr.width(); x++) {
-				for (int y = 0; y < outputYCbCr.height(); y++) {
-					// Set the first channel of the image to the equalised values
-					outputYCbCr(x, y, 0) = outputImage(x, y);
+						// Set the second channel of the new image to the chroma blue channel values of the initial input image
+						outputYCbCr(x, y, 1) = cbChannel(x, y);
 
-					// Set the second channel of the new image to the chroma blue channel values of the initial input image
-					outputYCbCr(x, y, 1) = cbChannel(x, y);
-
-					// Set the third channel of the new image to the chroma red channel values of the initial input image
-					outputYCbCr(x, y, 2) = crChannel(x, y);
+						// Set the third channel of the new image to the chroma red channel values of the initial input image
+						outputYCbCr(x, y, 2) = crChannel(x, y);
+					}
 				}
+				// Convert the image back into RGB
+				imgOutput = outputYCbCr.get_YCbCrtoRGB();
 			}
-			// Convert the image back into RGB
-			outputImage = outputYCbCr.get_YCbCrtoRGB();
+
+			// Display the final equalised image
+			CImgDisplay displayOutput(imgOutput, "output");
+
+			// Close the input image and output image windows if the ESC key is pressed
+			while (!displayInput.is_closed() && !displayOutput.is_closed()
+				&& !displayInput.is_keyESC() && !displayOutput.is_keyESC()) {
+				displayInput.wait(1);
+				displayOutput.wait(1);
+			}
 		}
 
-		// Display the final equalised image
-		CImgDisplay displayOutput(outputImage, "output");
-		
-		// Close the input image and output image windows if the ESC key is pressed
-		while (!displayInput.is_closed() && !displayOutput.is_closed()
-			&& !displayInput.is_keyESC() && !displayOutput.is_keyESC()) {
-			displayInput.wait(1);
-			displayOutput.wait(1);
+		else {
+			// Create and display the output image from the output image buffer
+			CImg<unsigned char> imgOutput(outputData.data(), imgInput.width(), imgInput.height(), tempImgInput.depth(), imgInput.spectrum());
+
+			// Check if the image used RGB 
+			if (rgbUsed == true) {
+				// Create a new image with the same width and height as the initial input image, with three colour channels
+				CImg<unsigned short> outputYCbCr = imgOutput.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
+
+				// Loop through each pixel in the image
+				for (int x = 0; x < outputYCbCr.width(); x++) {
+					for (int y = 0; y < outputYCbCr.height(); y++) {
+						// Set the first channel of the image to the equalised values
+						outputYCbCr(x, y, 0) = imgOutput(x, y);
+
+						// Set the second channel of the new image to the chroma blue channel values of the initial input image
+						outputYCbCr(x, y, 1) = cbChannel(x, y);
+
+						// Set the third channel of the new image to the chroma red channel values of the initial input image
+						outputYCbCr(x, y, 2) = crChannel(x, y);
+					}
+				}
+				// Convert the image back into RGB
+				imgOutput = outputYCbCr.get_YCbCrtoRGB();
+			}
+
+			// Display the final equalised image
+			CImgDisplay displayOutput(imgOutput, "output");
+
+			// Close the input image and output image windows if the ESC key is pressed
+			while (!displayInput.is_closed() && !displayOutput.is_closed()
+				&& !displayInput.is_keyESC() && !displayOutput.is_keyESC()) {
+				displayInput.wait(1);
+				displayOutput.wait(1);
+			}
 		}
 	}
 
