@@ -1,11 +1,13 @@
 /*
+Submission
 - Stewart Charles Fisher II - ID: 25020928
 - Parallel Programming - CMP3752M
 - Assignment 1
 */
 
 /*
-- The code is designed to handle 8-bit imagery, of both greyscale and RGB varieties.
+Description
+- The code is designed to handle 8-bit and 16-bit imagery, of both greyscale and RGB varieties.
 - The contents of this code contain adaptations and improvements of Tutorial 2 and Tutorial 3, for the base code and the kernel functions.
 - The images that the code was tested on include .ppm and .pgm images. These images can be found in the relevant directories.
 - The intHistogram2 and cumHistogramHS2 kernels require extra arguments to be passed and these can be uncommented and commented as necessary, and are labelled accordingly.
@@ -13,6 +15,12 @@
 - The cumulative histogram implementations feature a simple implementation, two variations of the Hillis-Steele pattern, and a single implementation of the Blelloch pattern.
 - The user is able to give their own desired bin count, which can affect the output of the image and the histograms produced.
 - Performance metrics and the histograms are displayed to the user via the console.
+*/
+
+/*
+Issues
+- The 16-bit functionality is only produces a suitable image using a combination of the intHistogram and cumHistogram kernel functions.
+- The cumHistogramHS kernel function calculates a histogram but does not produce a suitable image.
 */
 
 #include <iostream>
@@ -48,7 +56,7 @@ int main(int argc, char** argv) {
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
-	string imgFile = "test.ppm";
+	string imgFile = "test_16bit.pgm";
 
 	// Iterate through the command line arguments
 	for (int i = 1; i < argc; i++) {
@@ -86,30 +94,8 @@ int main(int argc, char** argv) {
 	// A variable to store the max intensity of the look-up table
 	int maxIntensity = 255;
 
-	// Prompt to enter a bin count
-	std::cout << "Enter a bin count in between 1 and 256." << "\n";
-
-	// Loop until a valid input has been received
-	while (true)
-	{
-		// Store user input in the pre-made variable
-		getline(std::cin, userInput);
-
-		// Check if the user input is an empty string and prompt the user to enter a valid input
-		if (userInput == "") { std::cout << "Please enter a number." << "\n"; continue; }
-
-		// Try to convert the user input to an integer and store it in the pre-made variable
-		try { binCount = std::stoi(userInput); }
-
-		// If the user input is not an integer, catch the exception and prompt the user for a valid input
-		catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
-
-		// Check if the user input is in the range of 1 and 256 and exit with the break statement
-		if (binCount >= 1 && binCount <= 65536) { break; }
-
-		// If the user input is not within the valid range, prompt the user to enter a valid input
-		else { std::cout << "Please enter a number in between 1 and 256." << "\n"; continue; }
-	}
+	// A variable to store the console output for 8 and 16-bit
+	int consoleVariant = 256;
 
 	// Try to apply the histogram equalisation algorithm
 	try {
@@ -118,20 +104,19 @@ int main(int argc, char** argv) {
 
 		CImg<unsigned short> tempImgInput(imgFile.c_str());
 
-		// Display the original input image
-		CImgDisplay displayInput(displayImgInput, "input");
-
 		// Check if the image is 16-bit
 		if (tempImgInput.max() <= 255) {
 			std::cout << "Loaded image is 8-bit." << std::endl;
 			is16BitUsed = false;
 			maxIntensity = 255;
+			consoleVariant = 256;
 		}
 
 		else if (tempImgInput.max() <= 65535) {
 			std::cout << "Loaded image is 16-bit." << std::endl;
 			is16BitUsed = true;
 			maxIntensity = 65535;
+			consoleVariant = 65536;
 		}
 
 		// RGB to YCbCr Conversion
@@ -155,6 +140,34 @@ int main(int argc, char** argv) {
 			cbChannel = ycbcrImage.get_channel(1);
 			crChannel = ycbcrImage.get_channel(2);
 		}
+
+		// Prompt to enter a bin count
+		std::cout << "Enter a bin count between 1 and " << consoleVariant << ": " << "\n";
+
+		// Loop until a valid input has been received
+		while (true)
+		{
+			// Store user input in the pre-made variable
+			getline(std::cin, userInput);
+
+			// Check if the user input is an empty string and prompt the user to enter a valid input
+			if (userInput == "") { std::cout << "Please enter a number." << "\n"; continue; }
+
+			// Try to convert the user input to an integer and store it in the pre-made variable
+			try { binCount = std::stoi(userInput); }
+
+			// If the user input is not an integer, catch the exception and prompt the user for a valid input
+			catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
+
+			// Check if the user input is in the range of 1 and the maximum, and exit with the break statement
+			if (binCount >= 1 && binCount <= consoleVariant) { break; }
+
+			// If the user input is not within the valid range, prompt the user to enter a valid input
+			else { std::cout << "Please enter a number in between 1 and " << consoleVariant << ": " << "\n"; continue; }
+		}
+
+		// Display the original input image
+		CImgDisplay displayInput(displayImgInput, "input");
 
 		// Create an OpenCL context object, with the platform and device to be used
 		cl::Context context = GetContext(platformID, deviceID);
@@ -313,20 +326,11 @@ int main(int argc, char** argv) {
 		// Read the output image data from the device back to the host
 		queue.enqueueReadBuffer(imgOutputBuffer, CL_TRUE, 0, imgInput.size() * sizeof(imgInput[0]), &outputData.data()[0]);
 
-		// Print the intensity histogram values
-		std::cout << std::endl << "Histogram Values: " << IH << std::endl;
-
 		// Calculate and print the intensity histogram kernel execution time
-		std::cout << std::endl << "Histogram Kernel Execution Time [ns]: " << intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
-
-		// Print the cumulative histogram values
-		std::cout << std::endl << "Cumulative Histogram Values: " << CH << std::endl;
+		std::cout << std::endl << "Intensity Histogram Kernel Execution Time [ns]: " << intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
 		// Calculate and print the cumulative histogram kernel execution time
 		std::cout << std::endl << "Cumulative Histogram Kernel Execution Time [ns]: " << cumHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - cumHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
-
-		// Print the look-up table values
-		std::cout << std::endl << "Look-Up Table (LUT) Values: " << LUT << std::endl;
 
 		// Calculate and print the look-up table kernel execution time
 		std::cout << std::endl << "LUT Kernel Execution Time [ns]: " << lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
