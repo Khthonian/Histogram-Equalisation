@@ -67,6 +67,54 @@ kernel void cumHistogram(global int* A, global int* B) {
 	}
 }
 
+// Calculate a cumulative histogram using the Blelloch pattern
+kernel void cumHistogramB(global int* A, global int* B) {
+	// Get the global ID of the current item and store it in a variable
+	int globalID = get_global_id(0);
+
+	// Get the size of all of the items and store it in a variable
+	int globalSize = get_global_size(0);
+
+	// Initialise a variable to store temporary values during swaps
+	int C;
+
+	// Iterate up through all the strides
+	for (int stride = 1; stride < globalSize; stride *= 2) {
+		// Check if the current item should be updated based upon the current stride and global ID
+		if (((globalID + 1) % (stride * 2)) == 0) {
+			A[globalID] += A[globalID - stride];
+		}
+
+		// Synchronise all work items in the work group
+		barrier(CLK_GLOBAL_MEM_FENCE);
+	}
+
+	// Set the last value to 0
+	if (globalID == 0) {
+		A[globalSize - 1] = 0;
+	}
+
+	// Synchronise all work items in the work group
+	barrier(CLK_GLOBAL_MEM_FENCE);
+
+	// Iterate down through all the strides
+	for (int stride = globalSize / 2; stride > 0; stride /= 2) {
+		// Check if the current item should be updated based upon the current stride and global ID 
+		if (((globalID + 1) % (stride * 2)) == 0) {
+			// Swap the values of the current item and the prior item
+			C = A[globalID];
+			A[globalID] += A[globalID - stride];
+			A[globalID - stride] = C;
+		}
+
+		// Synchronise all work items in the work group
+		barrier(CLK_GLOBAL_MEM_FENCE);
+	}
+
+	// Copy A into B
+	B[globalID] = A[globalID];
+}
+
 // Calculate a cumulative histogram using the Hillis-Steel pattern
 kernel void cumHistogramHS(global int* A, global int* B) {
 	// Get the global ID of the current item and store it in a variable
@@ -143,54 +191,6 @@ kernel void cumHistogramHS2(__global const int* A, global int* B, local int* X, 
 	B[globalID] = X[localID];
 }
 
-// Calculate a cumulative histogram using the Blelloch pattern
-kernel void cumHistogramB(global int* A, global int* B) {
-	// Get the global ID of the current item and store it in a variable
-	int globalID = get_global_id(0);
-
-	// Get the size of all of the items and store it in a variable
-	int globalSize = get_global_size(0);
-
-	// Initialise a variable to store temporary values during swaps
-	int C;
-
-	// Iterate up through all the strides
-	for (int stride = 1; stride < globalSize; stride *= 2) {
-		// Check if the current item should be updated based upon the current stride and global ID
-		if (((globalID + 1) % (stride * 2)) == 0) {
-			A[globalID] += A[globalID - stride];
-		}
-
-		// Synchronise all work items in the work group
-		barrier(CLK_GLOBAL_MEM_FENCE); 
-	}
-
-	// Set the last value to 0
-	if (globalID == 0) {
-		A[globalSize - 1] = 0;
-	}		
-
-	// Synchronise all work items in the work group
-	barrier(CLK_GLOBAL_MEM_FENCE); 
-
-	// Iterate down through all the strides
-	for (int stride = globalSize / 2; stride > 0; stride /= 2) {
-		// Check if the current item should be updated based upon the current stride and global ID 
-		if (((globalID + 1) % (stride * 2)) == 0) {
-			// Swap the values of the current item and the prior item
-			C = A[globalID];
-			A[globalID] += A[globalID - stride];  
-			A[globalID - stride] = C;		
-		}
-
-		// Synchronise all work items in the work group
-		barrier(CLK_GLOBAL_MEM_FENCE); 
-	}
-
-	// Copy A into B
-	B[globalID] = A[globalID];
-}
-
 // Store the normalised cumulative histogram to a look-up table for mapping the original intensities onto the output image
 kernel void lookupTable(global int* A, global int* B, const int maxIntensity) {
 	// Get the global ID of the current item and store it in a variable
@@ -200,6 +200,18 @@ kernel void lookupTable(global int* A, global int* B, const int maxIntensity) {
 	B[globalID] = A[globalID] * (double)maxIntensity / A[maxIntensity];
 }
 
+// Store the normalised cumulative histogram to a look-up table for mapping the original intensities onto the output image
+kernel void lookupTable2(global int* A, global int* B, const int maxIntensity, int binCount) {
+	// Get the global ID of the current item and store it in a variable
+	int globalID = get_global_id(0);
+
+	// Store the value of the array at the 'ID' point and store it in a variable
+	int index = A[globalID];
+
+	// Normalise the histogram to a maximum of 255.
+	B[globalID] = index * (double)maxIntensity / A[binCount - 1];
+}
+
 // Back-project each output pixel by indexing the look-up table with the original intensity level
 kernel void backprojection(global ushort* A, global int* LUT, global ushort* B) {
 	// Get the global ID of the current item and store it in a variable
@@ -207,4 +219,24 @@ kernel void backprojection(global ushort* A, global int* LUT, global ushort* B) 
 
 	// Set the value for the output using the value from the look-up table
 	B[globalID] = LUT[A[globalID]];
+}
+
+// Back-project each output pixel by indexing the look-up table with the original intensity level
+kernel void backprojection2(global ushort* A, global int* LUT, global ushort* B, int binCount, global int* histoSizeBuffer) {
+	// Get the global ID of the current item and store it in a variable
+	int globalID = get_global_id(0);
+
+	// Store the value of the array at the 'ID' point and store it in a variable
+	int index = A[globalID];
+
+	// Loop through each bin in the histogram
+	for (int i = 0; i < binCount; i++)
+	{
+		// Check if the input intensity falls within the current bin
+		if (index >= histoSizeBuffer[i] && index < histoSizeBuffer[i + 1])
+		{
+			// Map the input intensity to the output intensity using the look-up table
+			B[globalID] = LUT[i];
+		}
+	}
 }

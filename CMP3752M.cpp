@@ -8,7 +8,8 @@ Submission
 /*
 Description
 - The code is designed to handle 8-bit and 16-bit imagery, of both greyscale and RGB varieties.
-- The contents of this code contain adaptations and improvements of Tutorial 2 and Tutorial 3, for the base code and the kernel functions.
+- The contents of this code contain adaptations and improvements of Tutorial 2 and Tutorial 3, for the base code and the kernel functions. This can be found at https://github.com/wing8/OpenCL-Tutorials
+- There is also a kernel function that has been adapted from https://github.com/spoolean/HistogramEqualisation
 - The images that the code was tested on include .ppm and .pgm images. These images can be found in the relevant directories.
 - The intHistogram2 and cumHistogramHS2 kernels require extra arguments to be passed and these can be uncommented and commented as necessary, and are labelled accordingly.
 - The intensity histogram implementations feature a serial implementation and a parallel reduction implementation.
@@ -56,7 +57,7 @@ int main(int argc, char** argv) {
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
-	string imgFile = "test_16bit.pgm";
+	string imgFile = "test.ppm";
 
 	// Iterate through the command line arguments
 	for (int i = 1; i < argc; i++) {
@@ -203,7 +204,7 @@ int main(int argc, char** argv) {
 
 		// Create a vector to determine the size of the increments for the histogram, based upon the bin count
 		std::vector<int> binValues(binCount);
-		int increments = 256 / binCount;
+		int increments = consoleVariant / binCount;
 		for (int i = 0; i < binCount; i++)
 		{
 			binValues[i] = i * increments;
@@ -238,24 +239,23 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(intHistoBuffer, 0, 0, histoSize);
 		
 		// Prepare the kernel for the intensity histogram
-		cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram");
-		//cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram2");
+		//cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram");
+		cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram2");
 
 		// Set the arguments for the intensity histogram
 		intHistoKernel.setArg(0, imgInputBuffer);
 		intHistoKernel.setArg(1, intHistoBuffer);
 
 		// Additional arguments for intHistogram2
-		//intHistoKernel.setArg(2, (int)imgInput.size());
-		//intHistoKernel.setArg(3, binCount);
-		//intHistoKernel.setArg(4, histoSizeBuffer);
-		//intHistoKernel.setArg(5, cl::Local(histoSize));
+		intHistoKernel.setArg(2, (int)imgInput.size());
+		intHistoKernel.setArg(3, binCount);
+		intHistoKernel.setArg(4, histoSizeBuffer);
+		intHistoKernel.setArg(5, cl::Local(histoSize));
 
 
 		// Run the intensity histogram event on the device
 		cl::Event intHistoEvent;
 		queue.enqueueNDRangeKernel(intHistoKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NullRange, NULL, &intHistoEvent);
-		//queue.enqueueNDRangeKernel(intHistoKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NDRange(IH.size()), NULL, &intHistoEvent);
 
 		// Read the intensity histogram data from the device back to the host
 		queue.enqueueReadBuffer(intHistoBuffer, CL_TRUE, 0, histoSize, &IH[0]);
@@ -267,18 +267,18 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the cumulative histogram	
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramB");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
 
 		// Set the arguments for the cumulative histogram
 		cumHistoKernel.setArg(0, intHistoBuffer);
 		cumHistoKernel.setArg(1, cumHistoBuffer);
 
 		// Additional arguments for cumHistogramHS2
-		//cumHistoKernel.setArg(2, cl::Local(histoSize));
-		//cumHistoKernel.setArg(3, cl::Local(histoSize));
+		cumHistoKernel.setArg(2, cl::Local(histoSize));
+		cumHistoKernel.setArg(3, cl::Local(histoSize));
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;
@@ -294,12 +294,14 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(lookupBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the look-up table
-		cl::Kernel lookupKernel = cl::Kernel(program, "lookupTable");
+		//cl::Kernel lookupKernel = cl::Kernel(program, "lookupTable");
+		cl::Kernel lookupKernel = cl::Kernel(program, "lookupTable2");
 
 		// Set the arguments for the look-up table
 		lookupKernel.setArg(0, cumHistoBuffer);
 		lookupKernel.setArg(1, lookupBuffer);
 		lookupKernel.setArg(2, maxIntensity);
+		lookupKernel.setArg(3, binCount);
 
 		// Run the look-up table event
 		cl::Event lookupEvent;
@@ -309,12 +311,15 @@ int main(int argc, char** argv) {
 		queue.enqueueReadBuffer(lookupBuffer, CL_TRUE, 0, histoSize, &LUT[0]);
 
 		// Prepare the kernel for the back-projection
-		cl::Kernel backprojectKernel = cl::Kernel(program, "backprojection");
+		//cl::Kernel backprojectKernel = cl::Kernel(program, "backprojection");
+		cl::Kernel backprojectKernel = cl::Kernel(program, "backprojection2");
 
 		// Set the arguments for the back-projection
 		backprojectKernel.setArg(0, imgInputBuffer);
 		backprojectKernel.setArg(1, lookupBuffer);
 		backprojectKernel.setArg(2, imgOutputBuffer);
+		backprojectKernel.setArg(3, binCount);
+		backprojectKernel.setArg(4, histoSizeBuffer);
 
 		// Run the back-projection event
 		cl::Event backprojectEvent;
@@ -329,14 +334,23 @@ int main(int argc, char** argv) {
 		// Calculate and print the intensity histogram kernel execution time
 		std::cout << std::endl << "Intensity Histogram Kernel Execution Time [ns]: " << intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
+		std::cout << std::endl << IH << std::endl;
+
 		// Calculate and print the cumulative histogram kernel execution time
 		std::cout << std::endl << "Cumulative Histogram Kernel Execution Time [ns]: " << cumHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - cumHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+
+		std::cout << std::endl << CH << std::endl;
 
 		// Calculate and print the look-up table kernel execution time
 		std::cout << std::endl << "LUT Kernel Execution Time [ns]: " << lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
+		std::cout << std::endl << LUT << std::endl;
+
 		// Calculate and print the back-projection kernel execution time
 		std::cout << std::endl << "Back-Projection Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+
+		// Calculate and print the total execution time of the kernels
+		std::cout << std::endl << "Total Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
 		// Check if 16-bit imagery was used
 		if (is16BitUsed) {
