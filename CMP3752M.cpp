@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
-	string imgFile = "test.ppm";
+	string imgFile = "test_16bit.pgm";
 
 	// Iterate through the command line arguments
 	for (int i = 1; i < argc; i++) {
@@ -237,6 +237,17 @@ int main(int argc, char** argv) {
 		queue.enqueueWriteBuffer(histoSizeBuffer, CL_TRUE, 0, histoSize, &binValues[0]);
 
 		queue.enqueueFillBuffer(intHistoBuffer, 0, 0, histoSize);
+
+		cl::Device device = queue.getInfo<CL_QUEUE_DEVICE>();
+		std::cout << "Max work-group size: " << device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
+		std::cout << "Max work-item dimensions: " << device.getInfo<CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS>() << std::endl;
+		std::cout << "Max work-item sizes: ";
+		std::vector<size_t> maxWorkItemSizes = device.getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
+		for (size_t i = 0; i < maxWorkItemSizes.size(); ++i) {
+			std::cout << maxWorkItemSizes[i] << " ";
+		}
+		std::cout << std::endl;
+		std::cout << "Local memory size: " << device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() << std::endl;
 		
 		// Prepare the kernel for the intensity histogram
 		//cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram");
@@ -256,7 +267,7 @@ int main(int argc, char** argv) {
 		// Run the intensity histogram event on the device
 		cl::Event intHistoEvent;
 		queue.enqueueNDRangeKernel(intHistoKernel, cl::NullRange, cl::NDRange(imgInput.size()), cl::NullRange, NULL, &intHistoEvent);
-
+		
 		// Read the intensity histogram data from the device back to the host
 		queue.enqueueReadBuffer(intHistoBuffer, CL_TRUE, 0, histoSize, &IH[0]);
 
@@ -267,18 +278,18 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the cumulative histogram	
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramB");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
 
 		// Set the arguments for the cumulative histogram
 		cumHistoKernel.setArg(0, intHistoBuffer);
 		cumHistoKernel.setArg(1, cumHistoBuffer);
 
 		// Additional arguments for cumHistogramHS2
-		cumHistoKernel.setArg(2, cl::Local(histoSize));
-		cumHistoKernel.setArg(3, cl::Local(histoSize));
+		//cumHistoKernel.setArg(2, cl::Local(histoSize));
+		//cumHistoKernel.setArg(3, cl::Local(histoSize));
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;
@@ -301,6 +312,8 @@ int main(int argc, char** argv) {
 		lookupKernel.setArg(0, cumHistoBuffer);
 		lookupKernel.setArg(1, lookupBuffer);
 		lookupKernel.setArg(2, maxIntensity);
+
+		// Additional arguments for lookupTable2
 		lookupKernel.setArg(3, binCount);
 
 		// Run the look-up table event
@@ -362,19 +375,15 @@ int main(int argc, char** argv) {
 				// Create a new image with the same width and height as the initial input image, with three colour channels
 				CImg<unsigned short> outputYCbCr = imgOutput.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
 
-				// Loop through each pixel in the image
-				for (int x = 0; x < outputYCbCr.width(); x++) {
-					for (int y = 0; y < outputYCbCr.height(); y++) {
-						// Set the first channel of the image to the equalised values
-						outputYCbCr(x, y, 0) = imgOutput(x, y);
+				// Set the first channel of the image to the equalised values
+				outputYCbCr.get_channel(0) = imgOutput;
 
-						// Set the second channel of the new image to the chroma blue channel values of the initial input image
-						outputYCbCr(x, y, 1) = cbChannel(x, y);
+				// Set the second channel of the new image to the chroma blue channel values of the initial input image
+				outputYCbCr.get_channel(1) = cbChannel;
 
-						// Set the third channel of the new image to the chroma red channel values of the initial input image
-						outputYCbCr(x, y, 2) = crChannel(x, y);
-					}
-				}
+				// Set the third channel of the new image to the chroma red channel values of the initial input image
+				outputYCbCr.get_channel(2) = crChannel;
+
 				// Convert the image back into RGB
 				imgOutput = outputYCbCr.get_YCbCrtoRGB();
 			}
@@ -399,19 +408,15 @@ int main(int argc, char** argv) {
 				// Create a new image with the same width and height as the initial input image, with three colour channels
 				CImg<unsigned short> outputYCbCr = imgOutput.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
 
-				// Loop through each pixel in the image
-				for (int x = 0; x < outputYCbCr.width(); x++) {
-					for (int y = 0; y < outputYCbCr.height(); y++) {
-						// Set the first channel of the image to the equalised values
-						outputYCbCr(x, y, 0) = imgOutput(x, y);
+				// Set the first channel of the image to the equalised values
+				outputYCbCr.get_channel(0) = imgOutput;
 
-						// Set the second channel of the new image to the chroma blue channel values of the initial input image
-						outputYCbCr(x, y, 1) = cbChannel(x, y);
+				// Set the second channel of the new image to the chroma blue channel values of the initial input image
+				outputYCbCr.get_channel(1) = cbChannel;
 
-						// Set the third channel of the new image to the chroma red channel values of the initial input image
-						outputYCbCr(x, y, 2) = crChannel(x, y);
-					}
-				}
+				// Set the third channel of the new image to the chroma red channel values of the initial input image
+				outputYCbCr.get_channel(2) = crChannel;
+
 				// Convert the image back into RGB
 				imgOutput = outputYCbCr.get_YCbCrtoRGB();
 			}
