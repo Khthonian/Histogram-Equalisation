@@ -140,9 +140,7 @@ kernel void cumHistogramHS(global int* A, global int* B) {
 		barrier(CLK_GLOBAL_MEM_FENCE);
 
 		// Swap the buffers
-		C = A;
-		A = B;
-		B = C;
+		C = A; A = B; B = C;
 	}
 }
 
@@ -208,7 +206,7 @@ kernel void lookupTable2(global int* A, global int* B, const int maxIntensity, i
 	// Store the value of the array at the 'ID' point and store it in a variable
 	int index = A[globalID];
 
-	// Normalise the histogram to a maximum of 255.
+	// Normalise the histogram to a maximum, respective to the bit width.
 	B[globalID] = index * (double)maxIntensity / A[binCount - 1];
 }
 

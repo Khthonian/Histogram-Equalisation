@@ -16,6 +16,7 @@ Description
 - The cumulative histogram implementations feature a simple implementation, two variations of the Hillis-Steele pattern, and a single implementation of the Blelloch pattern.
 - The user is able to give their own desired bin count, which can affect the output of the image and the histograms produced.
 - Performance metrics and the histograms are displayed to the user via the console.
+- Each step of the model will be indicated as follows: "STEP X - XXXXX"
 */
 
 /*
@@ -57,7 +58,7 @@ int main(int argc, char** argv) {
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
-	string imgFile = "test_16bit.pgm";
+	string imgFile = "test.pgm";
 
 	// Iterate through the command line arguments
 	for (int i = 1; i < argc; i++) {
@@ -80,7 +81,7 @@ int main(int argc, char** argv) {
 	// Disable CImg library exception handling
 	cimg::exception_mode(0);
 
-	// A variable to hold the input of the user
+	// A variable to hold the input of the user for the bin count
 	string userInput;
 
 	// A variable to hold the converted user input
@@ -100,6 +101,10 @@ int main(int argc, char** argv) {
 
 	// Try to apply the histogram equalisation algorithm
 	try {
+		/*
+		STEP 1 - IMAGE PREPARATION
+		*/
+
 		// Open the image file
 		CImg<unsigned char> displayImgInput(imgFile.c_str());
 
@@ -142,6 +147,10 @@ int main(int argc, char** argv) {
 			crChannel = ycbcrImage.get_channel(2);
 		}
 
+		/*
+		STEP 2 - BIN COUNT SELECTION
+		*/
+
 		// Prompt to enter a bin count
 		std::cout << "Enter a bin count between 1 and " << consoleVariant << ": " << "\n";
 
@@ -166,6 +175,10 @@ int main(int argc, char** argv) {
 			// If the user input is not within the valid range, prompt the user to enter a valid input
 			else { std::cout << "Please enter a number in between 1 and " << consoleVariant << ": " << "\n"; continue; }
 		}
+
+		/*
+		STEP 3 - MODEL PREPARATION
+		*/
 
 		// Display the original input image
 		CImgDisplay displayInput(displayImgInput, "input");
@@ -199,6 +212,10 @@ int main(int argc, char** argv) {
 			throw err;
 		}
 
+		/*
+		STEP 4 - BUFFER PREPARATION
+		*/
+
 		// Create a vector for the intensity histogram with the size of the user-defined bin count
 		std::vector<int> IH(binCount);
 
@@ -230,6 +247,10 @@ int main(int argc, char** argv) {
 
 		// Create an OpenCL buffer equal to the histogram size
 		cl::Buffer histoSizeBuffer(context, CL_MEM_READ_WRITE, histoSize);
+
+		/*
+		STEP 5 - INTENSITY HISTOGRAM
+		*/
 
 		// Write the input image data to the relevant device buffer
 		queue.enqueueWriteBuffer(imgInputBuffer, CL_TRUE, 0, imgInput.size() * sizeof(imgInput[0]), &imgInput.data()[0]);
@@ -271,6 +292,10 @@ int main(int argc, char** argv) {
 		// Read the intensity histogram data from the device back to the host
 		queue.enqueueReadBuffer(intHistoBuffer, CL_TRUE, 0, histoSize, &IH[0]);
 
+		/*
+		STEP 6 - CUMULATIVE HISTOGRAM
+		*/
+
 		// Create a vector for the cumulative histogram with the size of the user-defined bin count
 		std::vector<int> CH(binCount);
 
@@ -278,9 +303,9 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the cumulative histogram	
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramB");
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
 
 		// Set the arguments for the cumulative histogram
@@ -297,6 +322,10 @@ int main(int argc, char** argv) {
 
 		// Read the cumulative histogram data from the device back to the host
 		queue.enqueueReadBuffer(cumHistoBuffer, CL_TRUE, 0, histoSize, &CH[0]);
+
+		/*
+		STEP 7 - LOOK-UP TABLE
+		*/
 
 		// Create a vector for the look-up-table with the size of the user-defined bin count
 		std::vector<int> LUT(binCount);
@@ -323,6 +352,10 @@ int main(int argc, char** argv) {
 		// Read the look-up table data from the device back to the host
 		queue.enqueueReadBuffer(lookupBuffer, CL_TRUE, 0, histoSize, &LUT[0]);
 
+		/*
+		STEP 8 - BACK-PROJECTION
+		*/
+
 		// Prepare the kernel for the back-projection
 		//cl::Kernel backprojectKernel = cl::Kernel(program, "backprojection");
 		cl::Kernel backprojectKernel = cl::Kernel(program, "backprojection2");
@@ -336,6 +369,10 @@ int main(int argc, char** argv) {
 
 		// Run the back-projection event
 		cl::Event backprojectEvent;
+
+		/*
+		STEP 9 - MODEL OUTPUT AND PERFORMANCE
+		*/
 
 		// Create a vector for the output image data with the size of the input image
 		vector<unsigned short> outputData(imgInput.size());
