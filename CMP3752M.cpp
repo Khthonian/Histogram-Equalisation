@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
-	string imgFile = "test_16bit.pgm";
+	string imgFile = "test.pgm";
 
 	// Iterate through the command line arguments
 	for (int i = 1; i < argc; i++) {
