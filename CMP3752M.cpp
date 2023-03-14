@@ -21,7 +21,6 @@ Description
 
 /*
 Issues
-- The 16-bit functionality is only produces a suitable image using a combination of the intHistogram and cumHistogram kernel functions.
 - The cumHistogramHS kernel function calculates a histogram but does not produce a suitable image.
 */
 
@@ -58,7 +57,7 @@ int main(int argc, char** argv) {
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
-	string imgFile = "test.pgm";
+	string imgFile = "test_16bit.pgm";
 
 	// Iterate through the command line arguments
 	for (int i = 1; i < argc; i++) {
@@ -102,7 +101,7 @@ int main(int argc, char** argv) {
 	// Try to apply the histogram equalisation algorithm
 	try {
 		/*
-		STEP 1 - IMAGE PREPARATION
+		STEP 1 ---------------- IMAGE PREPARATION ----------------
 		*/
 
 		// Open the image file
@@ -130,7 +129,7 @@ int main(int argc, char** argv) {
 		CImg<unsigned short> cbChannel, crChannel;
 
 		if (tempImgInput.spectrum() == 1) {
-			std::cout << "Loaded image is grayscale." << std::endl;
+			std::cout << "Loaded image is greyscale." << std::endl;
 			imgInput = tempImgInput;
 			rgbUsed = false;
 		}
@@ -148,11 +147,11 @@ int main(int argc, char** argv) {
 		}
 
 		/*
-		STEP 2 - BIN COUNT SELECTION
+		STEP 2 ---------------- BIN COUNT SELECTION ----------------
 		*/
 
 		// Prompt to enter a bin count
-		std::cout << "Enter a bin count between 1 and " << consoleVariant << ": " << "\n";
+		std::cout << "Enter a bin count between 1 and 256: " << "\n";
 
 		// Loop until a valid input has been received
 		while (true)
@@ -170,14 +169,14 @@ int main(int argc, char** argv) {
 			catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
 
 			// Check if the user input is in the range of 1 and the maximum, and exit with the break statement
-			if (binCount >= 1 && binCount <= consoleVariant) { break; }
+			if (binCount >= 1 && binCount <= 256) { break; }
 
 			// If the user input is not within the valid range, prompt the user to enter a valid input
-			else { std::cout << "Please enter a number in between 1 and " << consoleVariant << ": " << "\n"; continue; }
+			else { std::cout << "Please enter a number in between 1 and 256: " << "\n"; continue; }
 		}
 
 		/*
-		STEP 3 - MODEL PREPARATION
+		STEP 3 ---------------- MODEL PREPARATION ----------------
 		*/
 
 		// Display the original input image
@@ -213,7 +212,7 @@ int main(int argc, char** argv) {
 		}
 
 		/*
-		STEP 4 - BUFFER PREPARATION
+		STEP 4 ---------------- BUFFER PREPARATION ----------------
 		*/
 
 		// Create a vector for the intensity histogram with the size of the user-defined bin count
@@ -249,7 +248,7 @@ int main(int argc, char** argv) {
 		cl::Buffer histoSizeBuffer(context, CL_MEM_READ_WRITE, histoSize);
 
 		/*
-		STEP 5 - INTENSITY HISTOGRAM
+		STEP 5 ---------------- INTENSITY HISTOGRAM ----------------
 		*/
 
 		// Write the input image data to the relevant device buffer
@@ -293,7 +292,7 @@ int main(int argc, char** argv) {
 		queue.enqueueReadBuffer(intHistoBuffer, CL_TRUE, 0, histoSize, &IH[0]);
 
 		/*
-		STEP 6 - CUMULATIVE HISTOGRAM
+		STEP 6 ---------------- CUMULATIVE HISTOGRAM ----------------
 		*/
 
 		// Create a vector for the cumulative histogram with the size of the user-defined bin count
@@ -305,16 +304,16 @@ int main(int argc, char** argv) {
 		// Prepare the kernel for the cumulative histogram	
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramB");
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
 
 		// Set the arguments for the cumulative histogram
 		cumHistoKernel.setArg(0, intHistoBuffer);
 		cumHistoKernel.setArg(1, cumHistoBuffer);
 
 		// Additional arguments for cumHistogramHS2
-		//cumHistoKernel.setArg(2, cl::Local(histoSize));
-		//cumHistoKernel.setArg(3, cl::Local(histoSize));
+		cumHistoKernel.setArg(2, cl::Local(histoSize));
+		cumHistoKernel.setArg(3, cl::Local(histoSize));
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;
@@ -324,7 +323,7 @@ int main(int argc, char** argv) {
 		queue.enqueueReadBuffer(cumHistoBuffer, CL_TRUE, 0, histoSize, &CH[0]);
 
 		/*
-		STEP 7 - LOOK-UP TABLE
+		STEP 7 ---------------- LOOK-UP TABLE ----------------
 		*/
 
 		// Create a vector for the look-up-table with the size of the user-defined bin count
@@ -353,7 +352,7 @@ int main(int argc, char** argv) {
 		queue.enqueueReadBuffer(lookupBuffer, CL_TRUE, 0, histoSize, &LUT[0]);
 
 		/*
-		STEP 8 - BACK-PROJECTION
+		STEP 8 ---------------- BACK-PROJECTION ----------------
 		*/
 
 		// Prepare the kernel for the back-projection
@@ -371,7 +370,7 @@ int main(int argc, char** argv) {
 		cl::Event backprojectEvent;
 
 		/*
-		STEP 9 - MODEL OUTPUT AND PERFORMANCE
+		STEP 9 ---------------- MODEL OUTPUT AND PERFORMANCE ----------------
 		*/
 
 		// Create a vector for the output image data with the size of the input image
@@ -412,14 +411,17 @@ int main(int argc, char** argv) {
 				// Create a new image with the same width and height as the initial input image, with three colour channels
 				CImg<unsigned short> outputYCbCr = imgOutput.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
 
-				// Set the first channel of the image to the equalised values
-				outputYCbCr.get_channel(0) = imgOutput;
-
-				// Set the second channel of the new image to the chroma blue channel values of the initial input image
-				outputYCbCr.get_channel(1) = cbChannel;
-
-				// Set the third channel of the new image to the chroma red channel values of the initial input image
-				outputYCbCr.get_channel(2) = crChannel;
+				// Loop through each pixel in the image
+				for (int x = 0; x < outputYCbCr.width(); x++) {
+					for (int y = 0; y < outputYCbCr.height(); y++) {
+						// Set the first channel of the image to the equalised values
+						outputYCbCr(x, y, 0) = imgOutput(x, y);
+						// Set the second channel of the new image to the chroma blue channel values of the initial input image
+						outputYCbCr(x, y, 1) = cbChannel(x, y);
+						// Set the third channel of the new image to the chroma red channel values of the initial input image
+						outputYCbCr(x, y, 2) = crChannel(x, y);
+					}
+				}
 
 				// Convert the image back into RGB
 				imgOutput = outputYCbCr.get_YCbCrtoRGB();
@@ -445,14 +447,17 @@ int main(int argc, char** argv) {
 				// Create a new image with the same width and height as the initial input image, with three colour channels
 				CImg<unsigned short> outputYCbCr = imgOutput.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
 
-				// Set the first channel of the image to the equalised values
-				outputYCbCr.get_channel(0) = imgOutput;
-
-				// Set the second channel of the new image to the chroma blue channel values of the initial input image
-				outputYCbCr.get_channel(1) = cbChannel;
-
-				// Set the third channel of the new image to the chroma red channel values of the initial input image
-				outputYCbCr.get_channel(2) = crChannel;
+				// Loop through each pixel in the image
+				for (int x = 0; x < outputYCbCr.width(); x++) {
+					for (int y = 0; y < outputYCbCr.height(); y++) {
+						// Set the first channel of the image to the equalised values
+						outputYCbCr(x, y, 0) = imgOutput(x, y);
+						// Set the second channel of the new image to the chroma blue channel values of the initial input image
+						outputYCbCr(x, y, 1) = cbChannel(x, y);
+						// Set the third channel of the new image to the chroma red channel values of the initial input image
+						outputYCbCr(x, y, 2) = crChannel(x, y);
+					}
+				}
 
 				// Convert the image back into RGB
 				imgOutput = outputYCbCr.get_YCbCrtoRGB();
