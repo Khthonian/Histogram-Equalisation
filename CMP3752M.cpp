@@ -390,15 +390,21 @@ int main(int argc, char** argv) {
 		// Calculate and print the cumulative histogram kernel execution time
 		std::cout << std::endl << "Cumulative Histogram Kernel Execution Time [ns]: " << cumHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - cumHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
+		std::cout << std::endl << "Cumulative Histogram Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
+		
 		std::cout << std::endl << CH << std::endl;
 
 		// Calculate and print the look-up table kernel execution time
 		std::cout << std::endl << "LUT Kernel Execution Time [ns]: " << lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
+		std::cout << std::endl << "LUT Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
+		
 		std::cout << std::endl << LUT << std::endl;
 
 		// Calculate and print the back-projection kernel execution time
 		std::cout << std::endl << "Back-Projection Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+
+		std::cout << std::endl << "Back-Projection Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
 
 		// Calculate and print the total execution time of the kernels
 		std::cout << std::endl << "Total Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;

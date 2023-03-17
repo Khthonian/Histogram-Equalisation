@@ -125,6 +125,14 @@
       <AdditionalLibraryDirectories>$(INTELOCLSDKROOT)lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>robocopy "$(ProjectDir)kernels" "$(OutDir)kernels" /E
+xcopy /Y "$(ProjectDir)test.pgm" "$(OutDir)"
+xcopy /Y "$(ProjectDir)test_large.pgm" "$(OutDir)"
+xcopy /Y "$(ProjectDir)test.ppm" "$(OutDir)"
+xcopy /Y "$(ProjectDir)test_large.ppm" "$(OutDir)"
+</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -147,12 +155,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="kernels\my_kernels.cl" />
-    <None Include="test.pgm">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
-    </None>
-    <None Include="test.ppm" />
-    <None Include="test_large.pgm" />
-    <None Include="test_large.ppm" />
+    <None Include="test.pgm" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\CImg.h" />
