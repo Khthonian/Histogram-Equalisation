@@ -146,11 +146,18 @@
     <ClCompile Include="CMP3752M.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\CImg.h" />
-    <ClInclude Include="include\Utils.h" />
+    <None Include="kernels\my_kernels.cl" />
+    <None Include="test.pgm">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+    </None>
+    <None Include="test.ppm" />
+    <None Include="test_large.pgm" />
+    <None Include="test_large.ppm" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="kernels\my_kernels.cl" />
+    <ClInclude Include="include\CImg.h" />
+    <ClInclude Include="include\CL\cl2.hpp" />
+    <ClInclude Include="include\Utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

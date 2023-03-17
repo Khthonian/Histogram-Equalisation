@@ -383,6 +383,8 @@ int main(int argc, char** argv) {
 		// Calculate and print the intensity histogram kernel execution time
 		std::cout << std::endl << "Intensity Histogram Kernel Execution Time [ns]: " << intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
+		std::cout << std::endl << "Intensity Histogram Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
+
 		std::cout << std::endl << IH << std::endl;
 
 		// Calculate and print the cumulative histogram kernel execution time
