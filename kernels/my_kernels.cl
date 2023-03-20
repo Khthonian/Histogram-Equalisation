@@ -25,7 +25,7 @@ kernel void intHistogram2(global const ushort* A, global int* B, int imgSize, in
 	int localSize = get_local_size(0);
 
 	// Initialise the local buffer to zero for each work item
-	for (int i = localID; i < binCount; i += localSize)	{
+	for (int i = localID; i < binCount; i += localSize) {
 		localBuffer[i] = 0;
 	}
 
@@ -34,12 +34,16 @@ kernel void intHistogram2(global const ushort* A, global int* B, int imgSize, in
 
 	// Iterate over all of the pixels and increment the respective bin in the local buffer
 	for (int i = globalID; i < imgSize; i += globalSize) {
-		for (int j = 0; j < binCount; j++) {
+		for (int j = 0; j < binCount - 1; j++) { // fixed
 			if (A[i] >= histoSizeBuffer[j] && A[i] < histoSizeBuffer[j + 1]) {
 				// Atomically increment the corresponding bin in the local buffer
 				atomic_inc(&localBuffer[j]);
 				break;
 			}
+		}
+		if (A[i] >= histoSizeBuffer[binCount - 1]) {
+			// Atomically increment the last bin in the local buffer
+			atomic_inc(&localBuffer[binCount - 1]);
 		}
 	}
 
@@ -47,9 +51,13 @@ kernel void intHistogram2(global const ushort* A, global int* B, int imgSize, in
 	barrier(CLK_LOCAL_MEM_FENCE);
 
 	// Add the local buffer to the global buffer to produce the final histogram
-	for (int i = localID; i < binCount; i += localSize)	{
+	for (int i = localID; i < binCount - 1; i += localSize) { // fixed
 		// Atomically add the corresponding bin into the global buffer
 		atomic_add(&B[i], localBuffer[i]);
+	}
+	if (localID == 0 && binCount > 0) {
+		// Add the count for the last bin to the global buffer
+		atomic_add(&B[binCount - 1], localBuffer[binCount - 1]);
 	}
 }
 
@@ -194,8 +202,11 @@ kernel void lookupTable(global int* A, global int* B, const int maxIntensity) {
 	// Get the global ID of the current item and store it in a variable
 	int globalID = get_global_id(0);
 
+	// Store the value of the array at the 'ID' point and store it in a variable
+	int index = A[globalID];
+
 	// Calculate the value for the output
-	B[globalID] = A[globalID] * (double)maxIntensity / A[maxIntensity];
+	B[globalID] = index * (double)maxIntensity / A[maxIntensity];
 }
 
 // Store the normalised cumulative histogram to a look-up table for mapping the original intensities onto the output image
@@ -215,8 +226,11 @@ kernel void backprojection(global ushort* A, global int* LUT, global ushort* B) 
 	// Get the global ID of the current item and store it in a variable
 	int globalID = get_global_id(0);
 
+	// Store the value of the array at the 'ID' point and store it in a variable
+	int index = A[globalID];
+
 	// Set the value for the output using the value from the look-up table
-	B[globalID] = LUT[A[globalID]];
+	B[globalID] = LUT[index];
 }
 
 // Back-project each output pixel by indexing the look-up table with the original intensity level

@@ -31,6 +31,9 @@ Issues
 
 using namespace cimg_library;
 
+// Define a type specifically for the image
+typedef unsigned short modularImage;
+
 // A function to display instructions for using the program
 void print_help() {
 	std::cerr << "Application usage:" << std::endl;
@@ -49,6 +52,22 @@ void print_help() {
 
 	// Prompt to display the instructions again
 	std::cerr << "  -h : print this message" << std::endl;
+}
+
+// A function to display the output image, varied by bit width
+CImgDisplay displayOutputImage(CImg<modularImage> image, bool is16BitUsed) {
+	// Check the bit width
+	if (is16BitUsed) {
+		CImg<unsigned short> newImage = (CImg<modularImage>) image;
+		CImgDisplay displayOutputImage(newImage, "Output");
+		return displayOutputImage;
+	}
+
+	else {
+		CImg<unsigned char> newImage = (CImg<modularImage>) image;
+		CImgDisplay displayOutput(newImage, "Output");
+		return displayOutput;
+	}
 }
 
 int main(int argc, char** argv) {
@@ -227,7 +246,7 @@ int main(int argc, char** argv) {
 		}
 
 		// Calculate the total size of the histogram in bytes
-		size_t histoSize = IH.size() * sizeof(int);
+		size_t histoSize = binCount * sizeof(int);
 
 		// Create an OpenCL buffer for the input image
 		cl::Buffer imgInputBuffer(context, CL_MEM_READ_ONLY, imgInput.size() * sizeof(imgInput[0]));
@@ -259,6 +278,8 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(intHistoBuffer, 0, 0, histoSize);
 
 		cl::Device device = queue.getInfo<CL_QUEUE_DEVICE>();
+
+		std::cout << std::endl;
 		std::cout << "Max work-group size: " << device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
 		std::cout << "Max work-item dimensions: " << device.getInfo<CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS>() << std::endl;
 		std::cout << "Max work-item sizes: ";
@@ -409,77 +430,37 @@ int main(int argc, char** argv) {
 		// Calculate and print the total execution time of the kernels
 		std::cout << std::endl << "Total Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
-		// Check if 16-bit imagery was used
-		if (is16BitUsed) {
-			// Create and display the output image from the output image buffer
-			CImg<unsigned short> imgOutput(outputData.data(), imgInput.width(), imgInput.height(), tempImgInput.depth(), imgInput.spectrum());
-			
-			// Check if the image used RGB 
-			if (rgbUsed == true) {
-				// Create a new image with the same width and height as the initial input image, with three colour channels
-				CImg<unsigned short> outputYCbCr = imgOutput.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
+		CImg<modularImage> imgOutput(outputData.data(), imgInput.width(), imgInput.height(), tempImgInput.depth(), imgInput.spectrum());
 
-				// Loop through each pixel in the image
-				for (int x = 0; x < outputYCbCr.width(); x++) {
-					for (int y = 0; y < outputYCbCr.height(); y++) {
-						// Set the first channel of the image to the equalised values
-						outputYCbCr(x, y, 0) = imgOutput(x, y);
-						// Set the second channel of the new image to the chroma blue channel values of the initial input image
-						outputYCbCr(x, y, 1) = cbChannel(x, y);
-						// Set the third channel of the new image to the chroma red channel values of the initial input image
-						outputYCbCr(x, y, 2) = crChannel(x, y);
-					}
+		// Check if the image used RGB 
+		if (rgbUsed == true) {
+			// Create a new image with the same width and height as the initial input image, with three colour channels
+			CImg<unsigned short> outputYCbCr = imgOutput.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
+
+			// Loop through each pixel in the image
+			for (int x = 0; x < outputYCbCr.width(); x++) {
+				for (int y = 0; y < outputYCbCr.height(); y++) {
+					// Set the first channel of the image to the equalised values
+					outputYCbCr(x, y, 0) = imgOutput(x, y);
+					// Set the second channel of the new image to the chroma blue channel values of the initial input image
+					outputYCbCr(x, y, 1) = cbChannel(x, y);
+					// Set the third channel of the new image to the chroma red channel values of the initial input image
+					outputYCbCr(x, y, 2) = crChannel(x, y);
 				}
-
-				// Convert the image back into RGB
-				imgOutput = outputYCbCr.get_YCbCrtoRGB();
 			}
 
-			// Display the final equalised image
-			CImgDisplay displayOutput(imgOutput, "output");
-
-			// Close the input image and output image windows if the ESC key is pressed
-			while (!displayInput.is_closed() && !displayOutput.is_closed()
-				&& !displayInput.is_keyESC() && !displayOutput.is_keyESC()) {
-				displayInput.wait(1);
-				displayOutput.wait(1);
-			}
+			// Convert the image back into RGB
+			imgOutput = outputYCbCr.get_YCbCrtoRGB();
 		}
 
-		else {
-			// Create and display the output image from the output image buffer
-			CImg<unsigned char> imgOutput(outputData.data(), imgInput.width(), imgInput.height(), tempImgInput.depth(), imgInput.spectrum());
+		// Display the final equalised image
+		CImgDisplay displayOutput = displayOutputImage(imgOutput, is16BitUsed);
 
-			// Check if the image used RGB 
-			if (rgbUsed == true) {
-				// Create a new image with the same width and height as the initial input image, with three colour channels
-				CImg<unsigned short> outputYCbCr = imgOutput.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
-
-				// Loop through each pixel in the image
-				for (int x = 0; x < outputYCbCr.width(); x++) {
-					for (int y = 0; y < outputYCbCr.height(); y++) {
-						// Set the first channel of the image to the equalised values
-						outputYCbCr(x, y, 0) = imgOutput(x, y);
-						// Set the second channel of the new image to the chroma blue channel values of the initial input image
-						outputYCbCr(x, y, 1) = cbChannel(x, y);
-						// Set the third channel of the new image to the chroma red channel values of the initial input image
-						outputYCbCr(x, y, 2) = crChannel(x, y);
-					}
-				}
-
-				// Convert the image back into RGB
-				imgOutput = outputYCbCr.get_YCbCrtoRGB();
-			}
-
-			// Display the final equalised image
-			CImgDisplay displayOutput(imgOutput, "output");
-
-			// Close the input image and output image windows if the ESC key is pressed
-			while (!displayInput.is_closed() && !displayOutput.is_closed()
-				&& !displayInput.is_keyESC() && !displayOutput.is_keyESC()) {
-				displayInput.wait(1);
-				displayOutput.wait(1);
-			}
+		// Close the input image and output image windows if the ESC key is pressed
+		while (!displayInput.is_closed() && !displayOutput.is_closed()
+			&& !displayInput.is_keyESC() && !displayOutput.is_keyESC()) {
+			displayInput.wait(1);
+			displayOutput.wait(1);
 		}
 	}
 
