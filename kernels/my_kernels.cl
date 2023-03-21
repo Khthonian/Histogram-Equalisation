@@ -150,6 +150,11 @@ kernel void cumHistogramHS(global int* A, global int* B) {
 		// Swap the buffers
 		C = A; A = B; B = C;
 	}
+
+	// Final buffer swap
+	B[globalID] = A[globalID];
+	barrier(CLK_GLOBAL_MEM_FENCE);
+	C = A; A = B; B = C;
 }
 
 // Calculate a cumulative histogram using the Hillis-Steele pattern

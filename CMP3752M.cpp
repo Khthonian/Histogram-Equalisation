@@ -19,11 +19,6 @@ Description
 - Each step of the model will be indicated as follows: "STEP X - XXXXX"
 */
 
-/*
-Issues
-- The cumHistogramHS kernel function calculates a histogram but does not produce a suitable image.
-*/
-
 #include <iostream>
 #include <vector>
 #include "include/Utils.h"
@@ -325,16 +320,16 @@ int main(int argc, char** argv) {
 		// Prepare the kernel for the cumulative histogram	
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramB");
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
 
 		// Set the arguments for the cumulative histogram
 		cumHistoKernel.setArg(0, intHistoBuffer);
 		cumHistoKernel.setArg(1, cumHistoBuffer);
 
 		// Additional arguments for cumHistogramHS2
-		cumHistoKernel.setArg(2, cl::Local(histoSize));
-		cumHistoKernel.setArg(3, cl::Local(histoSize));
+		//cumHistoKernel.setArg(2, cl::Local(histoSize));
+		//cumHistoKernel.setArg(3, cl::Local(histoSize));
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;
