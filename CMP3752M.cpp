@@ -49,9 +49,9 @@ void print_help() {
 	std::cerr << "  -h : print this message" << std::endl;
 }
 
-// A function to display the output image, varied by bit width
+// A function to display the output image, varied by bit depth
 CImgDisplay displayOutputImage(CImg<modularImage> image, bool is16BitUsed) {
-	// Check the bit width
+	// Check the bit depth
 	if (is16BitUsed) {
 		CImg<unsigned short> newImage = (CImg<modularImage>) image;
 		CImgDisplay displayOutputImage(newImage, "Output");
@@ -320,16 +320,16 @@ int main(int argc, char** argv) {
 		// Prepare the kernel for the cumulative histogram	
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
 		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramB");
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
+		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
 
 		// Set the arguments for the cumulative histogram
 		cumHistoKernel.setArg(0, intHistoBuffer);
 		cumHistoKernel.setArg(1, cumHistoBuffer);
 
 		// Additional arguments for cumHistogramHS2
-		//cumHistoKernel.setArg(2, cl::Local(histoSize));
-		//cumHistoKernel.setArg(3, cl::Local(histoSize));
+		cumHistoKernel.setArg(2, cl::Local(histoSize));
+		cumHistoKernel.setArg(3, cl::Local(histoSize));
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;

@@ -222,7 +222,7 @@ kernel void lookupTable2(global int* A, global int* B, const int maxIntensity, i
 	// Store the value of the array at the 'ID' point and store it in a variable
 	int index = A[globalID];
 
-	// Normalise the histogram to a maximum, respective to the bit width.
+	// Normalise the histogram to a maximum, respective to the bit depth.
 	B[globalID] = index * (double)maxIntensity / A[binCount - 1];
 }
 
