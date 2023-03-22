@@ -34,7 +34,7 @@ kernel void intHistogram2(global const ushort* A, global int* B, int imgSize, in
 
 	// Iterate over all of the pixels and increment the respective bin in the local buffer
 	for (int i = globalID; i < imgSize; i += globalSize) {
-		for (int j = 0; j < binCount - 1; j++) { // fixed
+		for (int j = 0; j < binCount - 1; j++) {
 			if (A[i] >= histoSizeBuffer[j] && A[i] < histoSizeBuffer[j + 1]) {
 				// Atomically increment the corresponding bin in the local buffer
 				atomic_inc(&localBuffer[j]);
@@ -51,7 +51,7 @@ kernel void intHistogram2(global const ushort* A, global int* B, int imgSize, in
 	barrier(CLK_LOCAL_MEM_FENCE);
 
 	// Add the local buffer to the global buffer to produce the final histogram
-	for (int i = localID; i < binCount - 1; i += localSize) { // fixed
+	for (int i = localID; i < binCount - 1; i += localSize) {
 		// Atomically add the corresponding bin into the global buffer
 		atomic_add(&B[i], localBuffer[i]);
 	}
@@ -123,7 +123,7 @@ kernel void cumHistogramB(global int* A, global int* B) {
 	B[globalID] = A[globalID];
 }
 
-// Calculate a cumulative histogram using the Hillis-Steel pattern
+// Calculate a cumulative histogram using the Hillis-Steele pattern
 kernel void cumHistogramHS(global int* A, global int* B) {
 	// Get the global ID of the current item and store it in a variable
 	int globalID = get_global_id(0);
@@ -247,11 +247,9 @@ kernel void backprojection2(global ushort* A, global int* LUT, global ushort* B,
 	int index = A[globalID];
 
 	// Loop through each bin in the histogram
-	for (int i = 0; i < binCount; i++)
-	{
+	for (int i = 0; i < binCount; i++) {
 		// Check if the input intensity falls within the current bin
-		if (index >= histoSizeBuffer[i] && index < histoSizeBuffer[i + 1])
-		{
+		if (index >= histoSizeBuffer[i] && index < histoSizeBuffer[i + 1]) {
 			// Map the input intensity to the output intensity using the look-up table
 			B[globalID] = LUT[i];
 		}

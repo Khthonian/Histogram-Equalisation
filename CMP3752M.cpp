@@ -11,10 +11,10 @@ Description
 - The contents of this code contain adaptations and improvements of Tutorial 2 and Tutorial 3, for the base code and the kernel functions. This can be found at https://github.com/wing8/OpenCL-Tutorials
 - There is also a kernel function that has been adapted from https://github.com/spoolean/HistogramEqualisation
 - The images that the code was tested on include .ppm and .pgm images. These images can be found in the relevant directories.
-- The intHistogram2 and cumHistogramHS2 kernels require extra arguments to be passed and these can be uncommented and commented as necessary, and are labelled accordingly.
 - The intensity histogram implementations feature a serial implementation and a parallel reduction implementation.
 - The cumulative histogram implementations feature a simple implementation, two variations of the Hillis-Steele pattern, and a single implementation of the Blelloch pattern.
 - The user is able to give their own desired bin count, which can affect the output of the image and the histograms produced.
+- The user is also able to select the functions being used.
 - Performance metrics and the histograms are displayed to the user via the console.
 - Each step of the model will be indicated as follows: "STEP X - XXXXX"
 */
@@ -67,7 +67,7 @@ CImgDisplay displayOutputImage(CImg<modularImage> image, bool is16BitUsed) {
 
 int main(int argc, char** argv) {
 	// Set the default platform and device to 0
-	int platformID = 0;
+	int platformID = 1;
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
@@ -99,6 +99,18 @@ int main(int argc, char** argv) {
 
 	// A variable to hold the converted user input
 	int binCount = 0;
+
+	// A variable to hold the input of the user for the intensity histogram
+	int intHistoChoice;
+
+	// A variable to hold the input of the user for the intensity histogram
+	int cumHistoChoice;
+
+	// A variable to hold the input of the user for the intensity histogram
+	int lookupChoice;
+
+	// A variable to hold the input of the user for the intensity histogram
+	int backprojectChoice;
 
 	// A variable to store whether a 16-bit image was used
 	bool is16BitUsed;
@@ -161,7 +173,7 @@ int main(int argc, char** argv) {
 		}
 
 		/*
-		STEP 2 ---------------- BIN COUNT SELECTION ----------------
+		STEP 2 ---------------- MODEL SELECTION ----------------
 		*/
 
 		// Prompt to enter a bin count
@@ -189,6 +201,166 @@ int main(int argc, char** argv) {
 			else { std::cout << "Please enter a number in between 1 and 256: " << "\n"; continue; }
 		}
 
+		// Prompt to enter a selection for the intensity histogram
+		std::cout << "\n" << "Enter an option for the intensity histogram: " << "\n";
+		std::cout << "1) Serial Implementation" << "\n";
+		std::cout << "2) Local Memory Implementation" << "\n";
+
+		// Loop until a valid input has been received
+		while (true)
+		{
+			// Store user input in the pre-made variable
+			getline(std::cin, userInput);
+
+			// Check if the user input is an empty string and prompt the user to enter a valid input
+			if (userInput == "") { std::cout << "Please enter a number." << "\n"; continue; }
+
+			// Try to convert the user input to an integer and store it in the pre-made variable
+			try { intHistoChoice = std::stoi(userInput); }
+
+			// If the user input is not an integer, catch the exception and prompt the user for a valid input
+			catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
+
+			// Check if the user input is in the range of 1 and the maximum, and exit with the break statement
+			if (intHistoChoice >= 1 && intHistoChoice <= 2) { break; }
+
+			// If the user input is not within the valid range, prompt the user to enter a valid input
+			else { std::cout << "Please enter 1 or 2: " << "\n"; continue; }
+		}
+
+		// Switch the kernel according to choice.
+		string intHistoFunction;
+		switch (intHistoChoice) {
+			case 1:
+				intHistoFunction = "intHistogram";
+				break;
+			case 2:
+				intHistoFunction = "intHistogram2";
+				break;
+		}
+
+		// Prompt to enter a selection for the cumulative histogram
+		std::cout << "\n" << "Enter an option for the cumulative histogram: " << "\n";
+		std::cout << "1) Serial Implementation" << "\n";
+		std::cout << "2) Blelloch Implementation" << "\n";
+		std::cout << "3) Hillis-Steele Implementation" << "\n";
+		std::cout << "4) Double Buffered Hillis-Steele Implementation" << "\n";
+
+		// Loop until a valid input has been received
+		while (true)
+		{
+			// Store user input in the pre-made variable
+			getline(std::cin, userInput);
+
+			// Check if the user input is an empty string and prompt the user to enter a valid input
+			if (userInput == "") { std::cout << "Please enter a number." << "\n"; continue; }
+
+			// Try to convert the user input to an integer and store it in the pre-made variable
+			try { cumHistoChoice = std::stoi(userInput); }
+
+			// If the user input is not an integer, catch the exception and prompt the user for a valid input
+			catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
+
+			// Check if the user input is in the range of 1 and the maximum, and exit with the break statement
+			if (cumHistoChoice >= 1 && cumHistoChoice <= 4) { break; }
+
+			// If the user input is not within the valid range, prompt the user to enter a valid input
+			else { std::cout << "Please enter a number between 1 and 4: " << "\n"; continue; }
+		}
+
+		// Switch the kernel according to choice.
+		string cumHistoFunction;
+		switch (cumHistoChoice) {
+			case 1:
+				cumHistoFunction = "cumHistogram";
+				break;
+			case 2:
+				cumHistoFunction = "cumHistogramB";
+				break;
+			case 3:
+				cumHistoFunction = "cumHistogramHS";
+				break;
+			case 4:
+				cumHistoFunction = "cumHistogramHS2";
+				break;
+		}
+
+		// Prompt to enter a selection for the look-up table
+		std::cout << "\n" << "Enter an option for the look-up table: " << "\n";
+		std::cout << "1) Standardised Implementation" << "\n";
+		std::cout << "2) Variable Implementation" << "\n";
+
+		// Loop until a valid input has been received
+		while (true)
+		{
+			// Store user input in the pre-made variable
+			getline(std::cin, userInput);
+
+			// Check if the user input is an empty string and prompt the user to enter a valid input
+			if (userInput == "") { std::cout << "Please enter a number." << "\n"; continue; }
+
+			// Try to convert the user input to an integer and store it in the pre-made variable
+			try { lookupChoice = std::stoi(userInput); }
+
+			// If the user input is not an integer, catch the exception and prompt the user for a valid input
+			catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
+
+			// Check if the user input is in the range of 1 and the maximum, and exit with the break statement
+			if (lookupChoice >= 1 && lookupChoice <= 2) { break; }
+
+			// If the user input is not within the valid range, prompt the user to enter a valid input
+			else { std::cout << "Please enter 1 or 2: " << "\n"; continue; }
+		}
+
+		// Switch the kernel according to choice.
+		string lookupFunction;
+		switch (lookupChoice) {
+		case 1:
+			lookupFunction = "lookupTable";
+			break;
+		case 2:
+			lookupFunction = "lookupTable2";
+			break;
+		}
+
+		// Prompt to enter a selection for the back-projection
+		std::cout << "\n" << "Enter an option for the back-projection: " << "\n";
+		std::cout << "1) Standardised Implementation" << "\n";
+		std::cout << "2) Variable Implementation" << "\n";
+
+		// Loop until a valid input has been received
+		while (true)
+		{
+			// Store user input in the pre-made variable
+			getline(std::cin, userInput);
+
+			// Check if the user input is an empty string and prompt the user to enter a valid input
+			if (userInput == "") { std::cout << "Please enter a number." << "\n"; continue; }
+
+			// Try to convert the user input to an integer and store it in the pre-made variable
+			try { backprojectChoice = std::stoi(userInput); }
+
+			// If the user input is not an integer, catch the exception and prompt the user for a valid input
+			catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
+
+			// Check if the user input is in the range of 1 and the maximum, and exit with the break statement
+			if (backprojectChoice >= 1 && backprojectChoice <= 2) { break; }
+
+			// If the user input is not within the valid range, prompt the user to enter a valid input
+			else { std::cout << "Please enter 1 or 2: " << "\n"; continue; }
+		}
+
+		// Switch the kernel according to choice.
+		string backprojectFunction;
+		switch (backprojectChoice) {
+		case 1:
+			backprojectFunction = "backprojection";
+			break;
+		case 2:
+			backprojectFunction = "backprojection2";
+			break;
+		}
+
 		/*
 		STEP 3 ---------------- MODEL PREPARATION ----------------
 		*/
@@ -200,7 +372,7 @@ int main(int argc, char** argv) {
 		cl::Context context = GetContext(platformID, deviceID);
 
 		// Print the platform ID and device ID being used
-		std::cout << "Running on " << GetPlatformName(platformID) << ", " << GetDeviceName(platformID, deviceID) << std::endl;
+		std::cout << "\n" << "Running on " << GetPlatformName(platformID) << ", " << GetDeviceName(platformID, deviceID) << std::endl;
 
 		// Enable profiling for the command, to measure the program performance
 		cl::CommandQueue queue(context, CL_QUEUE_PROFILING_ENABLE);
@@ -284,21 +456,34 @@ int main(int argc, char** argv) {
 		}
 		std::cout << std::endl;
 		std::cout << "Local memory size: " << device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() << std::endl;
+
+		// Switch the kernel according to choice.
+		switch (intHistoChoice) {
+			case 1:
+
+				break;
+		}
 		
 		// Prepare the kernel for the intensity histogram
-		//cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram");
-		cl::Kernel intHistoKernel = cl::Kernel(program, "intHistogram2");
+		cl::Kernel intHistoKernel = cl::Kernel(program, intHistoFunction.c_str());
 
-		// Set the arguments for the intensity histogram
-		intHistoKernel.setArg(0, imgInputBuffer);
-		intHistoKernel.setArg(1, intHistoBuffer);
-
-		// Additional arguments for intHistogram2
-		intHistoKernel.setArg(2, (int)imgInput.size());
-		intHistoKernel.setArg(3, binCount);
-		intHistoKernel.setArg(4, histoSizeBuffer);
-		intHistoKernel.setArg(5, cl::Local(histoSize));
-
+		// Switch the kernel according to choice.
+		switch (intHistoChoice) {
+			case 1:
+				// Set the arguments for the intensity histogram
+				intHistoKernel.setArg(0, imgInputBuffer);
+				intHistoKernel.setArg(1, intHistoBuffer);
+				break;
+			case 2:
+				// Set the arguments for the intensity histogram
+				intHistoKernel.setArg(0, imgInputBuffer);
+				intHistoKernel.setArg(1, intHistoBuffer);
+				intHistoKernel.setArg(2, (int)imgInput.size());
+				intHistoKernel.setArg(3, binCount);
+				intHistoKernel.setArg(4, histoSizeBuffer);
+				intHistoKernel.setArg(5, cl::Local(histoSize));
+				break;
+		}
 
 		// Run the intensity histogram event on the device
 		cl::Event intHistoEvent;
@@ -318,22 +503,29 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(cumHistoBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the cumulative histogram	
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogram");
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramB");
-		//cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS");
-		cl::Kernel cumHistoKernel = cl::Kernel(program, "cumHistogramHS2");
+		cl::Kernel cumHistoKernel = cl::Kernel(program, cumHistoFunction.c_str());
 
-		// Set the arguments for the cumulative histogram
-		cumHistoKernel.setArg(0, intHistoBuffer);
-		cumHistoKernel.setArg(1, cumHistoBuffer);
-
-		// Additional arguments for cumHistogramHS2
-		cumHistoKernel.setArg(2, cl::Local(histoSize));
-		cumHistoKernel.setArg(3, cl::Local(histoSize));
+		// Switch the kernel according to choice.
+		switch (cumHistoChoice) {
+		case 1:
+		case 2:
+		case 3:
+			// Set the arguments for the cumulative histogram
+			cumHistoKernel.setArg(0, intHistoBuffer);
+			cumHistoKernel.setArg(1, cumHistoBuffer);
+			break;
+		case 4:
+			// Set the arguments for the cumulative histogram
+			cumHistoKernel.setArg(0, intHistoBuffer);
+			cumHistoKernel.setArg(1, cumHistoBuffer);
+			cumHistoKernel.setArg(2, cl::Local(histoSize));
+			cumHistoKernel.setArg(3, cl::Local(histoSize));
+			break;
+		}
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;
-		queue.enqueueNDRangeKernel(cumHistoKernel, cl::NullRange, cl::NDRange(IH.size()), cl::NullRange, NULL, &cumHistoEvent);
+		queue.enqueueNDRangeKernel(cumHistoKernel, cl::NullRange, cl::NDRange(IH.size()), 256, NULL, &cumHistoEvent);
 
 		// Read the cumulative histogram data from the device back to the host
 		queue.enqueueReadBuffer(cumHistoBuffer, CL_TRUE, 0, histoSize, &CH[0]);
@@ -349,16 +541,24 @@ int main(int argc, char** argv) {
 		queue.enqueueFillBuffer(lookupBuffer, 0, 0, histoSize);
 
 		// Prepare the kernel for the look-up table
-		//cl::Kernel lookupKernel = cl::Kernel(program, "lookupTable");
-		cl::Kernel lookupKernel = cl::Kernel(program, "lookupTable2");
+		cl::Kernel lookupKernel = cl::Kernel(program, lookupFunction.c_str());
 
-		// Set the arguments for the look-up table
-		lookupKernel.setArg(0, cumHistoBuffer);
-		lookupKernel.setArg(1, lookupBuffer);
-		lookupKernel.setArg(2, maxIntensity);
-
-		// Additional arguments for lookupTable2
-		lookupKernel.setArg(3, binCount);
+		// Switch the kernel according to choice.
+		switch (lookupChoice) {
+		case 1:
+			// Set the arguments for the look-up table
+			lookupKernel.setArg(0, cumHistoBuffer);
+			lookupKernel.setArg(1, lookupBuffer);
+			lookupKernel.setArg(2, maxIntensity);
+			break;
+		case 2:
+			// Set the arguments for the look-up table
+			lookupKernel.setArg(0, cumHistoBuffer);
+			lookupKernel.setArg(1, lookupBuffer);
+			lookupKernel.setArg(2, maxIntensity);
+			lookupKernel.setArg(3, binCount);
+			break;
+		}
 
 		// Run the look-up table event
 		cl::Event lookupEvent;
@@ -372,15 +572,25 @@ int main(int argc, char** argv) {
 		*/
 
 		// Prepare the kernel for the back-projection
-		//cl::Kernel backprojectKernel = cl::Kernel(program, "backprojection");
-		cl::Kernel backprojectKernel = cl::Kernel(program, "backprojection2");
+		cl::Kernel backprojectKernel = cl::Kernel(program, backprojectFunction.c_str());
 
-		// Set the arguments for the back-projection
-		backprojectKernel.setArg(0, imgInputBuffer);
-		backprojectKernel.setArg(1, lookupBuffer);
-		backprojectKernel.setArg(2, imgOutputBuffer);
-		backprojectKernel.setArg(3, binCount);
-		backprojectKernel.setArg(4, histoSizeBuffer);
+		// Switch the kernel according to choice.
+		switch (backprojectChoice) {
+		case 1:
+			// Set the arguments for the back-projection
+			backprojectKernel.setArg(0, imgInputBuffer);
+			backprojectKernel.setArg(1, lookupBuffer);
+			backprojectKernel.setArg(2, imgOutputBuffer);
+			break;
+		case 2:
+			// Set the arguments for the back-projection
+			backprojectKernel.setArg(0, imgInputBuffer);
+			backprojectKernel.setArg(1, lookupBuffer);
+			backprojectKernel.setArg(2, imgOutputBuffer);
+			backprojectKernel.setArg(3, binCount);
+			backprojectKernel.setArg(4, histoSizeBuffer);
+			break;
+		}
 
 		// Run the back-projection event
 		cl::Event backprojectEvent;
@@ -397,27 +607,41 @@ int main(int argc, char** argv) {
 		queue.enqueueReadBuffer(imgOutputBuffer, CL_TRUE, 0, imgInput.size() * sizeof(imgInput[0]), &outputData.data()[0]);
 
 		// Calculate and print the intensity histogram kernel execution time
+		std::cout << std::endl << "Intensity Histogram Kernel Function: " << intHistoFunction << std::endl;
+
 		std::cout << std::endl << "Intensity Histogram Kernel Execution Time [ns]: " << intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
 		std::cout << std::endl << "Intensity Histogram Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
 
-		std::cout << std::endl << IH << std::endl;
+		std::cout << std::endl << "Intensity Histogram Values:" << std::endl << IH << std::endl;
+
+		std::cout << std::endl << "--------------------------------------------------" << std::endl;
 
 		// Calculate and print the cumulative histogram kernel execution time
+		std::cout << std::endl << "Cumulative Histogram Kernel Function: " << cumHistoFunction << std::endl;
+
 		std::cout << std::endl << "Cumulative Histogram Kernel Execution Time [ns]: " << cumHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - cumHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
 		std::cout << std::endl << "Cumulative Histogram Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
 		
-		std::cout << std::endl << CH << std::endl;
+		std::cout << std::endl << "Cumulative Histogram Values:" << std::endl << CH << std::endl;
+
+		std::cout << std::endl << "--------------------------------------------------" << std::endl;
 
 		// Calculate and print the look-up table kernel execution time
+		std::cout << std::endl << "LUT Kernel Function: " << lookupFunction << std::endl;
+
 		std::cout << std::endl << "LUT Kernel Execution Time [ns]: " << lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
 		std::cout << std::endl << "LUT Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
 		
-		std::cout << std::endl << LUT << std::endl;
+		std::cout << std::endl << "LUT Values:" << std::endl << LUT << std::endl;
+
+		std::cout << std::endl << "--------------------------------------------------" << std::endl;
 
 		// Calculate and print the back-projection kernel execution time
+		std::cout << std::endl << "Back-Projection Kernel Function: " << backprojectFunction << std::endl;
+
 		std::cout << std::endl << "Back-Projection Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
 		std::cout << std::endl << "Back-Projection Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
