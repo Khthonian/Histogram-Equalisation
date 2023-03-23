@@ -30,7 +30,7 @@ using namespace cimg_library;
 typedef unsigned short modularImage;
 
 // A function to display instructions for using the program
-void print_help() {
+void printHelp() {
 	std::cerr << "Application usage:" << std::endl;
 
 	// Prompt to select a platform
@@ -47,6 +47,21 @@ void print_help() {
 
 	// Prompt to display the instructions again
 	std::cerr << "  -h : print this message" << std::endl;
+}
+
+void printProfiling(string step, string kernelFunctionName, cl::Event kernelEvent, vector<int> kernelValues = {}) {
+	// Calculate and print the intensity histogram kernel execution time
+	std::cout << std::endl << step << " Kernel Function: " << kernelFunctionName << std::endl;
+
+	std::cout << std::endl << step << " Kernel Execution Time [ns]: " << kernelEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - kernelEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+
+	std::cout << std::endl << step << " Kernel Memory Transfer: " << GetFullProfilingInfo(kernelEvent, ProfilingResolution::PROF_NS) << std::endl;
+
+	if (!kernelValues.empty()) {
+		std::cout << std::endl << step << " Values:" << std::endl << kernelValues << std::endl;
+	}
+
+	std::cout << std::endl << "--------------------------------------------------" << std::endl;
 }
 
 // A function to display the output image, varied by bit depth
@@ -67,7 +82,7 @@ CImgDisplay displayOutputImage(CImg<modularImage> image, bool is16BitUsed) {
 
 int main(int argc, char** argv) {
 	// Set the default platform and device to 0
-	int platformID = 1;
+	int platformID = 0;
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
@@ -88,7 +103,7 @@ int main(int argc, char** argv) {
 		else if ((strcmp(argv[i], "-f") == 0) && (i < (argc - 1))) { imgFile = argv[++i]; }
 
 		// Display the instructions and terminate the program
-		else if (strcmp(argv[i], "-h") == 0) { print_help(); return 0; }
+		else if (strcmp(argv[i], "-h") == 0) { printHelp(); return 0; }
 	}
 
 	// Disable CImg library exception handling
@@ -134,6 +149,8 @@ int main(int argc, char** argv) {
 		CImg<unsigned char> displayImgInput(imgFile.c_str());
 
 		CImg<unsigned short> tempImgInput(imgFile.c_str());
+
+		std::cout << "Loaded image is " << imgFile << std::endl;
 
 		// Check if the image is 16-bit
 		if (tempImgInput.max() <= 255) {
@@ -525,7 +542,7 @@ int main(int argc, char** argv) {
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;
-		queue.enqueueNDRangeKernel(cumHistoKernel, cl::NullRange, cl::NDRange(IH.size()), 256, NULL, &cumHistoEvent);
+		queue.enqueueNDRangeKernel(cumHistoKernel, cl::NullRange, cl::NDRange(IH.size()), cl::NullRange, NULL, &cumHistoEvent);
 
 		// Read the cumulative histogram data from the device back to the host
 		queue.enqueueReadBuffer(cumHistoBuffer, CL_TRUE, 0, histoSize, &CH[0]);
@@ -606,45 +623,14 @@ int main(int argc, char** argv) {
 		// Read the output image data from the device back to the host
 		queue.enqueueReadBuffer(imgOutputBuffer, CL_TRUE, 0, imgInput.size() * sizeof(imgInput[0]), &outputData.data()[0]);
 
-		// Calculate and print the intensity histogram kernel execution time
-		std::cout << std::endl << "Intensity Histogram Kernel Function: " << intHistoFunction << std::endl;
+		// Print the profiling values
+		printProfiling("Intensity Histogram", intHistoFunction, intHistoEvent, IH);
 
-		std::cout << std::endl << "Intensity Histogram Kernel Execution Time [ns]: " << intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		printProfiling("Cumulative Histogram", cumHistoFunction, cumHistoEvent, CH);
 
-		std::cout << std::endl << "Intensity Histogram Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
+		printProfiling("Look-up Table", lookupFunction, lookupEvent, LUT);
 
-		std::cout << std::endl << "Intensity Histogram Values:" << std::endl << IH << std::endl;
-
-		std::cout << std::endl << "--------------------------------------------------" << std::endl;
-
-		// Calculate and print the cumulative histogram kernel execution time
-		std::cout << std::endl << "Cumulative Histogram Kernel Function: " << cumHistoFunction << std::endl;
-
-		std::cout << std::endl << "Cumulative Histogram Kernel Execution Time [ns]: " << cumHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - cumHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
-
-		std::cout << std::endl << "Cumulative Histogram Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
-		
-		std::cout << std::endl << "Cumulative Histogram Values:" << std::endl << CH << std::endl;
-
-		std::cout << std::endl << "--------------------------------------------------" << std::endl;
-
-		// Calculate and print the look-up table kernel execution time
-		std::cout << std::endl << "LUT Kernel Function: " << lookupFunction << std::endl;
-
-		std::cout << std::endl << "LUT Kernel Execution Time [ns]: " << lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
-
-		std::cout << std::endl << "LUT Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
-		
-		std::cout << std::endl << "LUT Values:" << std::endl << LUT << std::endl;
-
-		std::cout << std::endl << "--------------------------------------------------" << std::endl;
-
-		// Calculate and print the back-projection kernel execution time
-		std::cout << std::endl << "Back-Projection Kernel Function: " << backprojectFunction << std::endl;
-
-		std::cout << std::endl << "Back-Projection Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
-
-		std::cout << std::endl << "Back-Projection Kernel Memory Transfer: " << GetFullProfilingInfo(intHistoEvent, ProfilingResolution::PROF_US) << std::endl;
+		printProfiling("Back-Projection", backprojectFunction, backprojectEvent);
 
 		// Calculate and print the total execution time of the kernels
 		std::cout << std::endl << "Total Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
