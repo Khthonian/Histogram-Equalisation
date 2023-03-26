@@ -79,8 +79,6 @@ kernel void intHistogram3(global const ushort* A, global int* B, int imgSize, in
 	}
 }
 
-
-
 // Calculate a cumulative histogram
 kernel void cumHistogram(global int* A, global int* B) {
 	// Get the global ID of the current item and store it in a variable
@@ -270,7 +268,6 @@ kernel void lookupTable3(global int* A, global int* B, const int maxIntensity, i
 	// Normalise the histogram to a maximum, respective to the bit depth.
 	B[globalID] = index * (double)maxIntensity / localA[binCount - 1];
 }
-
 
 // Back-project each output pixel by indexing the look-up table with the original intensity level
 kernel void backprojection(global ushort* A, global int* LUT, global ushort* B) {
