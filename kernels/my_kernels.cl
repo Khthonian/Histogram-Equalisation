@@ -11,7 +11,25 @@ kernel void intHistogram(global const ushort* A, global int* B) {
 }
 
 // Calculate an intensity histogram from the input image
-kernel void intHistogram2(global const ushort* A, global int* B, int imgSize, int binCount, global int* histoSizeBuffer, local int* localBuffer) {
+kernel void intHistogram2(global const ushort* A, global int* B, int binCount, int increments) {
+	// Get the global ID of the current item and store it in a variable
+	int globalID = get_global_id(0);
+
+	// Store the value of the array at the 'ID' point and store it in a variable
+	int index = A[globalID];
+
+	// Determine which bin the pixel value belongs to
+	int binIndex = (int)(index / increments);
+
+	// Ensure the pixel value is within the bounds of the histogram
+	binIndex = clamp(binIndex, 0, binCount - 1);
+
+	// Atomically increment the value of the output array at the 'binIndex' point
+	atomic_inc(&B[binIndex]);
+}
+
+// Calculate an intensity histogram from the input image
+kernel void intHistogram3(global const ushort* A, global int* B, int imgSize, int binCount, global int* histoSizeBuffer, local int* localBuffer) {
 	// Get the global ID of the current item and store it in a variable
 	int globalID = get_global_id(0);
 
@@ -60,6 +78,8 @@ kernel void intHistogram2(global const ushort* A, global int* B, int imgSize, in
 		atomic_add(&B[binCount - 1], localBuffer[binCount - 1]);
 	}
 }
+
+
 
 // Calculate a cumulative histogram
 kernel void cumHistogram(global int* A, global int* B) {
@@ -226,6 +246,32 @@ kernel void lookupTable2(global int* A, global int* B, const int maxIntensity, i
 	B[globalID] = index * (double)maxIntensity / A[binCount - 1];
 }
 
+// Store the normalised cumulative histogram to a look-up table for mapping the original intensities onto the output image
+kernel void lookupTable3(global int* A, global int* B, const int maxIntensity, int binCount) {
+	// Get the global ID of the current item and store it in a variable
+	int globalID = get_global_id(0);
+
+	// Declare an array in local memory
+	__local int localA[256];
+
+	// Copy a chunk of the input array to local memory
+	int chunkSize = get_local_size(0);
+	int localID = get_local_id(0);
+	for (int i = localID; i < binCount; i += chunkSize) {
+		localA[i] = A[i];
+	}
+
+	// Synchronise all work items in the work group
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	// Store the value of the array at the 'ID' point and store it in a variable
+	int index = localA[globalID];
+
+	// Normalise the histogram to a maximum, respective to the bit depth.
+	B[globalID] = index * (double)maxIntensity / localA[binCount - 1];
+}
+
+
 // Back-project each output pixel by indexing the look-up table with the original intensity level
 kernel void backprojection(global ushort* A, global int* LUT, global ushort* B) {
 	// Get the global ID of the current item and store it in a variable
@@ -252,6 +298,32 @@ kernel void backprojection2(global ushort* A, global int* LUT, global ushort* B,
 		if (index >= histoSizeBuffer[i] && index < histoSizeBuffer[i + 1]) {
 			// Map the input intensity to the output intensity using the look-up table
 			B[globalID] = LUT[i];
+		}
+	}
+}
+
+// Back-project each output pixel by indexing the look-up table with the original intensity level
+kernel void backprojection3(global ushort* A, global int* LUT, global ushort* B, int binCount, global int* histoSizeBuffer) {
+	// Get the global ID of the current item and store it in a variable
+	int globalID = get_global_id(0);
+
+	// Store the value of the array at the 'ID' point and store it in a variable
+	int index = A[globalID];
+
+	// Use a binary search to find the bin index that the input intensity falls within
+	int left = 0;
+	int right = binCount - 1;
+	while (left <= right) {
+		int middle = (left + right) / 2;
+		if (index < histoSizeBuffer[middle]) {
+			right = middle - 1;
+		}
+		else if (index >= histoSizeBuffer[middle + 1]) {
+			left = middle + 1;
+		}
+		else {
+			B[globalID] = LUT[middle];
+			break;
 		}
 	}
 }
