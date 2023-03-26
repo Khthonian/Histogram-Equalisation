@@ -65,17 +65,17 @@ void printProfiling(string step, string kernelFunctionName, cl::Event kernelEven
 }
 
 // A function to display the output image, varied by bit depth
-CImgDisplay displayOutputImage(CImg<modularImage> image, bool is16BitUsed) {
+CImgDisplay displayImage(CImg<modularImage> image, bool is16BitUsed, string peripheral) {
 	// Check the bit depth
 	if (is16BitUsed) {
 		CImg<unsigned short> newImage = (CImg<modularImage>) image;
-		CImgDisplay displayOutputImage(newImage, "Output");
-		return displayOutputImage;
+		CImgDisplay displayImage(newImage, peripheral.c_str());
+		return displayImage;
 	}
 
 	else {
 		CImg<unsigned char> newImage = (CImg<modularImage>) image;
-		CImgDisplay displayOutput(newImage, "Output");
+		CImgDisplay displayOutput(newImage, peripheral.c_str());
 		return displayOutput;
 	}
 }
@@ -146,42 +146,41 @@ int main(int argc, char** argv) {
 		*/
 
 		// Open the image file
-		CImg<unsigned char> displayImgInput(imgFile.c_str());
-
-		CImg<unsigned short> tempImgInput(imgFile.c_str());
+		CImg<unsigned short> imgInput(imgFile.c_str());
 
 		std::cout << "Loaded image is " << imgFile << std::endl;
 
 		// Check if the image is 16-bit
-		if (tempImgInput.max() <= 255) {
+		if (imgInput.max() <= 255) {
 			std::cout << "Loaded image is 8-bit." << std::endl;
 			is16BitUsed = false;
 			maxIntensity = 255;
 			consoleVariant = 256;
 		}
-
-		else if (tempImgInput.max() <= 65535) {
+		else if (imgInput.max() <= 65535) {
 			std::cout << "Loaded image is 16-bit." << std::endl;
 			is16BitUsed = true;
 			maxIntensity = 65535;
 			consoleVariant = 65536;
 		}
 
+		// Display the original input image
+		CImgDisplay displayInput = displayImage(imgInput, is16BitUsed, "Input");
+
 		// RGB to YCbCr Conversion
-		CImg<unsigned short> imgInput;
 		CImg<unsigned short> cbChannel, crChannel;
 
-		if (tempImgInput.spectrum() == 1) {
+		if (imgInput.spectrum() == 1) {
 			std::cout << "Loaded image is greyscale." << std::endl;
-			imgInput = tempImgInput;
+			imgInput = imgInput;
 			rgbUsed = false;
 		}
-		else if (tempImgInput.spectrum() == 3) {
+		else if (imgInput.spectrum() == 3) {
 			std::cout << "Loaded image is RGB." << std::endl;
 			rgbUsed = true;
 
 			// Convert RGB image to YCbCr
-			CImg<unsigned short> ycbcrImage = tempImgInput.get_RGBtoYCbCr();
+			CImg<unsigned short> ycbcrImage = imgInput.get_RGBtoYCbCr();
 
 			// Extract the channels setting y as the input image
 			imgInput = ycbcrImage.get_channel(0);
@@ -220,8 +219,9 @@ int main(int argc, char** argv) {
 
 		// Prompt to enter a selection for the intensity histogram
 		std::cout << "\n" << "Enter an option for the intensity histogram: " << "\n";
-		std::cout << "1) Serial Implementation" << "\n";
-		std::cout << "2) Local Memory Implementation" << "\n";
+		std::cout << "1) Standardised Implementation" << "\n";
+		std::cout << "2) Variable Implementation" << "\n";
+		std::cout << "3) Local Memory Implementation" << "\n";
 
 		// Loop until a valid input has been received
 		while (true)
@@ -239,10 +239,10 @@ int main(int argc, char** argv) {
 			catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
 
 			// Check if the user input is in the range of 1 and the maximum, and exit with the break statement
-			if (intHistoChoice >= 1 && intHistoChoice <= 2) { break; }
+			if (intHistoChoice >= 1 && intHistoChoice <= 3) { break; }
 
 			// If the user input is not within the valid range, prompt the user to enter a valid input
-			else { std::cout << "Please enter 1 or 2: " << "\n"; continue; }
+			else { std::cout << "Please enter a number between 1 and 3: " << "\n"; continue; }
 		}
 
 		// Switch the kernel according to choice.
@@ -253,6 +253,9 @@ int main(int argc, char** argv) {
 				break;
 			case 2:
 				intHistoFunction = "intHistogram2";
+				break;
+			case 3:
+				intHistoFunction = "intHistogram3";
 				break;
 		}
 
@@ -306,6 +309,7 @@ int main(int argc, char** argv) {
 		std::cout << "\n" << "Enter an option for the look-up table: " << "\n";
 		std::cout << "1) Standardised Implementation" << "\n";
 		std::cout << "2) Variable Implementation" << "\n";
+		std::cout << "3) Local Memory Implementation" << "\n";
 
 		// Loop until a valid input has been received
 		while (true)
@@ -323,10 +327,10 @@ int main(int argc, char** argv) {
 			catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
 
 			// Check if the user input is in the range of 1 and the maximum, and exit with the break statement
-			if (lookupChoice >= 1 && lookupChoice <= 2) { break; }
+			if (lookupChoice >= 1 && lookupChoice <= 3) { break; }
 
 			// If the user input is not within the valid range, prompt the user to enter a valid input
-			else { std::cout << "Please enter 1 or 2: " << "\n"; continue; }
+			else { std::cout << "Please enter a number between 1 and 3: " << "\n"; continue; }
 		}
 
 		// Switch the kernel according to choice.
@@ -338,12 +342,16 @@ int main(int argc, char** argv) {
 		case 2:
 			lookupFunction = "lookupTable2";
 			break;
+		case 3:
+			lookupFunction = "lookupTable3";
+			break;
 		}
 
 		// Prompt to enter a selection for the back-projection
 		std::cout << "\n" << "Enter an option for the back-projection: " << "\n";
 		std::cout << "1) Standardised Implementation" << "\n";
 		std::cout << "2) Variable Implementation" << "\n";
+		std::cout << "3) Binary Search Implementation" << "\n";
 
 		// Loop until a valid input has been received
 		while (true)
@@ -361,10 +369,10 @@ int main(int argc, char** argv) {
 			catch (...) { std::cout << "Please enter an integer." << "\n"; continue; }
 
 			// Check if the user input is in the range of 1 and the maximum, and exit with the break statement
-			if (backprojectChoice >= 1 && backprojectChoice <= 2) { break; }
+			if (backprojectChoice >= 1 && backprojectChoice <= 3) { break; }
 
 			// If the user input is not within the valid range, prompt the user to enter a valid input
-			else { std::cout << "Please enter 1 or 2: " << "\n"; continue; }
+			else { std::cout << "Please enter a number between 1 and 3: " << "\n"; continue; }
 		}
 
 		// Switch the kernel according to choice.
@@ -376,14 +384,14 @@ int main(int argc, char** argv) {
 		case 2:
 			backprojectFunction = "backprojection2";
 			break;
+		case 3:
+			backprojectFunction = "backprojection3";
+			break;
 		}
 
 		/*
 		STEP 3 ---------------- MODEL PREPARATION ----------------
 		*/
-
-		// Display the original input image
-		CImgDisplay displayInput(displayImgInput, "input");
 
 		// Create an OpenCL context object, with the platform and device to be used
 		cl::Context context = GetContext(platformID, deviceID);
@@ -473,13 +481,6 @@ int main(int argc, char** argv) {
 		}
 		std::cout << std::endl;
 		std::cout << "Local memory size: " << device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() << std::endl;
-
-		// Switch the kernel according to choice.
-		switch (intHistoChoice) {
-			case 1:
-
-				break;
-		}
 		
 		// Prepare the kernel for the intensity histogram
 		cl::Kernel intHistoKernel = cl::Kernel(program, intHistoFunction.c_str());
@@ -492,6 +493,13 @@ int main(int argc, char** argv) {
 				intHistoKernel.setArg(1, intHistoBuffer);
 				break;
 			case 2:
+				// Set the arguments for the intensity histogram
+				intHistoKernel.setArg(0, imgInputBuffer);
+				intHistoKernel.setArg(1, intHistoBuffer);
+				intHistoKernel.setArg(2, binCount);
+				intHistoKernel.setArg(3, increments);
+				break;
+			case 3:
 				// Set the arguments for the intensity histogram
 				intHistoKernel.setArg(0, imgInputBuffer);
 				intHistoKernel.setArg(1, intHistoBuffer);
@@ -569,6 +577,7 @@ int main(int argc, char** argv) {
 			lookupKernel.setArg(2, maxIntensity);
 			break;
 		case 2:
+		case 3:
 			// Set the arguments for the look-up table
 			lookupKernel.setArg(0, cumHistoBuffer);
 			lookupKernel.setArg(1, lookupBuffer);
@@ -600,6 +609,7 @@ int main(int argc, char** argv) {
 			backprojectKernel.setArg(2, imgOutputBuffer);
 			break;
 		case 2:
+		case 3:
 			// Set the arguments for the back-projection
 			backprojectKernel.setArg(0, imgInputBuffer);
 			backprojectKernel.setArg(1, lookupBuffer);
@@ -635,12 +645,12 @@ int main(int argc, char** argv) {
 		// Calculate and print the total execution time of the kernels
 		std::cout << std::endl << "Total Kernel Execution Time [ns]: " << backprojectEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - intHistoEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
-		CImg<modularImage> imgOutput(outputData.data(), imgInput.width(), imgInput.height(), tempImgInput.depth(), imgInput.spectrum());
+		CImg<modularImage> imgOutput(outputData.data(), imgInput.width(), imgInput.height(), imgInput.depth(), imgInput.spectrum());
 
 		// Check if the image used RGB 
 		if (rgbUsed == true) {
 			// Create a new image with the same width and height as the initial input image, with three colour channels
-			CImg<unsigned short> outputYCbCr = imgOutput.get_resize(tempImgInput.width(), tempImgInput.height(), 1, 3);
+			CImg<unsigned short> outputYCbCr = imgOutput.get_resize(imgInput.width(), imgInput.height(), 1, 3);
 
 			// Loop through each pixel in the image
 			for (int x = 0; x < outputYCbCr.width(); x++) {
@@ -659,7 +669,7 @@ int main(int argc, char** argv) {
 		}
 
 		// Display the final equalised image
-		CImgDisplay displayOutput = displayOutputImage(imgOutput, is16BitUsed);
+		CImgDisplay displayOutput = displayImage(imgOutput, is16BitUsed, "Output");
 
 		// Close the input image and output image windows if the ESC key is pressed
 		while (!displayInput.is_closed() && !displayOutput.is_closed()
