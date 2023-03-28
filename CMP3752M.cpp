@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
 	int deviceID = 0;
 
 	// Set the default image file to test.pgm
-	string imgFile = "test.pgm";
+	string imgFile = "test_16bit.pgm";
 
 	// Iterate through the command line arguments
 	for (int i = 1; i < argc; i++) {
@@ -481,6 +481,9 @@ int main(int argc, char** argv) {
 		}
 		std::cout << std::endl;
 		std::cout << "Local memory size: " << device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() << std::endl;
+
+		int workGroup = binCount;
+		//device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
 		
 		// Prepare the kernel for the intensity histogram
 		cl::Kernel intHistoKernel = cl::Kernel(program, intHistoFunction.c_str());
@@ -550,7 +553,7 @@ int main(int argc, char** argv) {
 
 		// Run the cumulative histogram event on the device
 		cl::Event cumHistoEvent;
-		queue.enqueueNDRangeKernel(cumHistoKernel, cl::NullRange, cl::NDRange(IH.size()), cl::NullRange, NULL, &cumHistoEvent);
+		queue.enqueueNDRangeKernel(cumHistoKernel, cl::NullRange, cl::NDRange(IH.size()), workGroup, NULL, &cumHistoEvent);
 
 		// Read the cumulative histogram data from the device back to the host
 		queue.enqueueReadBuffer(cumHistoBuffer, CL_TRUE, 0, histoSize, &CH[0]);
