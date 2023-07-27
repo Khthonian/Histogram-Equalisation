@@ -1,9 +1,5 @@
-# CMP3752M-Assessment-1
-
-## Submission
-- Stewart Charles Fisher II - ID: 25020928
-- Parallel Programming - CMP3752M
-- Assignment 1
+# Histogram Equalisation
+An implementation of histogram equalisation, using C++ and OpenCL, to showcase the usage of parallel programming.
 
 ## Description
 - The code is designed to handle 8-bit and 16-bit imagery, of both greyscale and RGB varieties.
